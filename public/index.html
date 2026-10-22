@@ -106,6 +106,20 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .hm-act{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 6px}.hm-list{max-height:52vh;overflow:auto}
 #job{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:30;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px 12px;max-width:min(680px,94vw);padding:8px 14px;border-radius:14px;background:rgba(14,10,30,.88);border:1px solid rgba(61,245,138,.5);box-shadow:0 0 18px rgba(61,245,138,.25);font-size:14px;color:#e8e2ff}
 #job b{color:#9dffc4}#job .late{color:#ff6b7d;font-weight:800}
+.cell .ochip{position:absolute;left:2px;top:2px;min-width:18px;padding:0 4px;border-radius:9px;background:rgba(63,242,255,.85);color:#04121a;font-size:10px;font-weight:800;line-height:15px;pointer-events:none;box-shadow:0 0 6px #3ff2ff}
+.inp{width:100%;padding:9px;border-radius:9px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:#fff;font:inherit}
+.gov-ed{display:grid;gap:8px;margin:10px 0;padding:12px;border-radius:12px;background:rgba(255,207,90,.08);border:1px solid rgba(255,207,90,.3)}
+.gov-ed label{display:grid;grid-template-columns:1fr 1.2fr 46px;gap:8px;align-items:center;font-size:14px}.gov-ed span{text-align:right;font-weight:800}
+.auc{display:grid;gap:4px;padding:12px;border-radius:12px;background:rgba(180,92,255,.1);border:1px solid rgba(180,92,255,.35)}
+#chat{position:fixed;left:14px;bottom:96px;z-index:25;width:min(420px,calc(100vw - 28px));display:flex;flex-direction:column;gap:6px;pointer-events:none}
+#chat.on{pointer-events:auto}.ch-list{display:flex;flex-direction:column;gap:3px;max-height:44vh;overflow:hidden}
+.ch-m{padding:4px 10px;border-radius:9px;background:rgba(10,6,24,.72);color:#efeaff;font-size:14px;line-height:1.35;word-wrap:break-word;text-shadow:0 1px 2px #000}
+.ch-m b{color:#3ff2ff;cursor:pointer;pointer-events:auto}.ch-m.priv{background:rgba(120,20,80,.75)}.ch-m.priv b{color:#ff9fd0}.ch-m.sys{color:#ffe08a;background:rgba(40,30,0,.6)}
+.ch-in{padding:10px 12px;border-radius:11px;border:1px solid #3ff2ff;background:rgba(10,6,24,.92);color:#fff;font:inherit;outline:none;box-shadow:0 0 14px rgba(63,242,255,.3)}
+.tb{height:42px;padding:0 12px;border-radius:12px;background:rgba(26,18,51,.9);border:1px solid var(--line);color:#fff;font-weight:800;font-size:13px;letter-spacing:.5px;box-shadow:0 6px 18px rgba(0,0,0,.4);position:relative}
+.tb.new::after{content:'';position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:#ff3d5a;box-shadow:0 0 8px #ff3d5a}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#5a5470}.dot.on{background:#3df58a;box-shadow:0 0 6px #3df58a}
+@media (max-width:700px){.tb{padding:0 8px;font-size:11px}}
 .gp-feed{display:flex;gap:6px;align-items:center;padding:5px 12px;overflow:hidden;white-space:nowrap;background:rgba(0,0,0,.35);border-bottom:1px solid rgba(255,255,255,.06);font-size:12.5px;font-weight:600;min-height:28px}
 .gp-feed .lv{color:#ff4d6d;font-weight:800;letter-spacing:.5px;flex:none}
 .gp-feed .fi{flex:none;padding:2px 9px;border-radius:99px;background:rgba(255,255,255,.07);color:#cfc8e8}
@@ -954,6 +968,7 @@ const UI = {
       <div class="grid2">
         <kbd>W A S D</kbd><span>Moverse (o flechas ↑ ↓)</span>
         <kbd>Shift</kbd><span>Correr</span>
+        <kbd>T</kbd><span>Chat (/help para comandos)</span>
         <kbd>Clic en el suelo</kbd><span>Caminar hasta ese punto</span>
         <kbd>Arrastrar / ← →</kbd><span>Girar la cámara · rueda: zoom</span>
         <kbd>E / Enter</kbd><span>Interactuar (entrar, jugar, trabajar)</span>
@@ -1600,7 +1615,7 @@ const World = (() => {
     initMats(); GLOW_TEX = glowTexture(); BLOB_TEX = blobTexture();
     applyQuality(true);
     addEventListener('resize', resize); resize();
-    const steps = [['city', () => extendCity(buildCity())], ['avenida', buildAvenida], ['sur', buildSur], ['salera', buildSalera], ['casino', () => extendCasino(buildCasino())], ['premier', buildPremier], ['vip', buildVip], ['roof', buildRoof], ['burger', buildBurger], ...(typeof Homes !== 'undefined' ? Homes.steps() : [])];
+    const steps = [['city', () => extendCity(buildCity())], ['avenida', buildAvenida], ['sur', buildSur], ['salera', buildSalera], ['sotano', buildSotano], ['casino', () => extendCasino(buildCasino())], ['premier', buildPremier], ['vip', buildVip], ['roof', buildRoof], ['burger', buildBurger], ...(typeof Homes !== 'undefined' ? Homes.steps() : []), ...(typeof Extra !== 'undefined' ? Extra.steps() : [])];
     let i = 0;
     return new Promise(res => {
       const next = () => {
@@ -1664,7 +1679,7 @@ const World = (() => {
       if (UI.panelGame) { UI.panelGame.onKey && UI.panelGame.onKey(e); if (e.code === 'Space') e.preventDefault(); return; }
       if (blocked) return;
       if (e.code === 'KeyM' || e.code === 'Tab') { e.preventDefault(); Phone.toggle(); return; }
-      const emk = !driving && { KeyG: 'wave', KeyB: 'dance', KeyR: 'watch', KeyT: 'pose' }[e.code]; if (emk) { emote(emk); return; }
+      const emk = !driving && { KeyG: 'wave', KeyB: 'dance', KeyR: 'watch', KeyP: 'pose' }[e.code]; if (emk) { emote(emk); return; }
       keys.add(e.code);
       if (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'NumpadEnter' || (e.code === 'Space' && !driving)) { interactPressed = true; e.preventDefault(); }
       if (e.code === 'Space') e.preventDefault();
@@ -1713,13 +1728,15 @@ const World = (() => {
      interacción se hacen en coordenadas locales del área en la que está. Se pasa de un área a
      otra andando por puertas, escaleras o en ascensor. */
   const PLACE = {
-    city: { off: [0, 0, 0], ext: true, zone: [-1e4, 40, -1e4, 34] },
+    city: { off: [0, 0, 0], ext: true, zone: [-1e4, 40, -34, 34] },
+    norte: { off: [0, 0, 0], ext: true, zone: [-1e4, 40, -1e4, -34] },
     sur: { off: [0, 0, 0], ext: true, zone: [-1e4, 40, 34, 1e4] },
     avenida: { off: [-328, 0, 0], ext: true, zone: [40, 1e4, -1e4, 1e4] },
     casino: { off: [0, 0, 376], zone: [-18.4, 18.4, -38.4, -10] },
     premier: { off: [0, 6, 776], zone: [-18.4, 18.4, -38.4, -10] },
     vip: { off: [0, 12, 1176], zone: [-18.4, 18.4, -38.4, -10] },
     roof: { off: [0, 18, 1576], zone: [-18.4, 18.4, -38.4, -10] },
+    sotano: { off: [0, -6, 1976], zone: [-34.4, 34.4, -48.4, .4] },
     burger: { off: [0, 0, -378], zone: [-12.4, 12.4, 10, 34.4] },
     salera: { off: [-328, 0, 369], zone: [47.6, 96.4, -48.4, -14] },
   };
@@ -2068,7 +2085,7 @@ function buildCity() {
   const sc = {
     label: 'PLAZA DEL NEÓN', music: 'city', group: new THREE.Group(), colliders: [], circles: [], interact: [], anims: [], lights: [],
     cam: { pitch: .4, dist: 8.5, min: 4, max: 15 }, camCollide: true, fog: [0x1a1236, 40, 165],
-    bounds: { x0: -100, x1: 41, z0: -34, z1: 35 }, spawn: { x: 0, z: .5, yaw: 0 },
+    bounds: { x0: -100, x1: 41, z0: -35, z1: 35 }, spawn: { x: 0, z: .5, yaw: 0 },
   };
   const G = new Geo(), R = seeded(7);
   const gl1 = new Glows(1.1), gl3 = new Glows(3.4), gl8 = new Glows(9);
@@ -2136,7 +2153,7 @@ function buildCity() {
   gm.rotation.x = -Math.PI / 2; sc.group.add(gm);
   const far = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshBasicMaterial({ color: 0x17141f })); far.rotation.x = -Math.PI / 2; far.position.y = -.05; sc.group.add(far);
   // calles laterales más allá del lienzo
-  for (const sx of [-34, 34]) for (const sz of [-1]) G.floor(sx - 5, sz > 0 ? 32 : -90, sx + 5, sz > 0 ? 90 : -32, .01, '#25222f', false);
+  for (const sx of [-34, 34]) for (const sz of []) G.floor(sx - 5, sz > 0 ? 32 : -90, sx + 5, sz > 0 ? 90 : -32, .01, '#25222f', false);
   G.floor(-130, -5, -96, 5, .01, '#25222f', false);
 
   /* ---------- Utilidades de edificio ---------- */
@@ -2472,8 +2489,8 @@ function buildCity() {
   for (let i = 0; i < 26; i++) {
     const x = -95 + i * 7.6 + R() * 3, w = 6 + R() * 8, h = 22 + R() * 50;
     if (x + w / 2 > 38) continue; // al este está la Avenida Salera
-    if (Math.abs(x) < 20) { tower(x - w / 2, x + w / 2, -60 - R() * 10, -46, h + 18, palette[i % palette.length], ['s'], { y0: 6, lit: .45, beacon: R() < .4 }); continue; }
-    tower(x - w / 2, x + w / 2, -48 - R() * 14, -36, h, palette[i % palette.length], ['s'], { y0: 6, lit: .45, beacon: R() < .3 });
+    if (x + w / 2 > -63) { R(); R(); R(); } else if (Math.abs(x) < 20) { tower(x - w / 2, x + w / 2, -60 - R() * 10, -46, h + 18, palette[i % palette.length], ['s'], { y0: 6, lit: .45, beacon: R() < .4 }); continue; }
+    if (x + w / 2 < -63) tower(x - w / 2, x + w / 2, -48 - R() * 14, -36, h, palette[i % palette.length], ['s'], { y0: 6, lit: .45, beacon: R() < .3 });
     if (x + w / 2 < -63) tower(x - w / 2, x + w / 2, 34, 46 + R() * 14, h * .8, palette[(i + 3) % palette.length], ['n'], { y0: 6, lit: .45, beacon: R() < .3 });
   }
   for (const sx of [-1, 1]) {
@@ -2805,7 +2822,7 @@ function buildCasino() {
       const [gx, gz] = xfPt(OX + lx, OZ + lz, ry, 0, .8); gl8.add(gx, 1.8, gz, accent, .22); gl3.add(tx, 2.62, tz, accent, .3);
       sc.colliders.push(rotAABB(OX + lx, OZ + lz, ry, -.7, -.5, .7, .62));
       const [ix, iz] = xfPt(OX + lx, OZ + lz, ry, 0, 1.5);
-      sc.interact.push({ x: ix, z: iz, r: 1.45, label, sub, fn });
+      sc.interact.push({ x: ix, z: iz, r: 1.45, label, sub, fn }); liveTex(sc, tex, ix, iz);
     };
     FRUIT_MACHINES.forEach((m, i) => {
       const z = -3 + i * 3.5;
@@ -2832,7 +2849,7 @@ function buildCasino() {
       const tp = plane(2.6, .58, top); tp.position.set(OX + lx, 3.9, OZ + lz + .32); sc.group.add(tp);
       gl8.add(OX + lx, 2.2, OZ + lz + 1, accent, .3); gl3.add(OX + lx, 3.9, OZ + lz + .4, accent, .4);
       sc.colliders.push({ x0: OX + lx - 1.35, x1: OX + lx + 1.35, z0: OZ + lz - .6, z1: OZ + lz + .65 });
-      sc.interact.push({ x: OX + lx, z: OZ + lz + 1.7, r: 1.9, label, sub, fn });
+      sc.interact.push({ x: OX + lx, z: OZ + lz + 1.7, r: 1.9, label, sub, fn }); liveTex(sc, tex, OX + lx, OZ + lz + 1.7);
     };
     cab2(-11.5, -10.6, '#3ff2ff', 'PLINKO', makeAnimTex(sc, 256, 320, drawPlinkoAttract, .07), 'Jugar a Plinko', 'Suelta la bola y reza', () => UI.open('plinko'));
     cab2(11.5, -10.6, '#3df58a', 'MINES', makeAnimTex(sc, 256, 320, drawMinesAttract, .2), 'Jugar a Mines', 'Encuentra gemas, evita minas', () => UI.open('mines'));
@@ -3270,6 +3287,7 @@ Games.mines = {
       sProfit.set(S.on ? fmt(Math.floor(S.bet * m)) : '—', S.on && S.open > 0);
       main.textContent = S.on ? (S.open ? 'Retirar ' + fmt(Math.floor(S.bet * m)) : 'Elige una casilla') : 'Apostar';
       main.disabled = S.on && S.open === 0; main.classList.toggle('pulse', S.on && S.open > 0);
+      Live.set({ grid: tiles.map(t => t.classList.contains('open') && !t.classList.contains('ghost') ? (t.classList.contains('mine') ? 'm' : 'g') : '.').join('') });
       rnd1.disabled = !S.on;
     }
     const this_ = this;
@@ -3379,24 +3397,29 @@ Games.roulette = {
     const repB = el('button', { class: 'btn sm', text: 'Repetir', onclick: () => { if (!S.last.length) return; const tot = S.last.reduce((a, b) => a + b[1], 0); if (tot > Wallet.cents) { UI.toast('No tienes saldo para repetir esa apuesta', 'bad'); return; } S.bets = new Map(S.last); S.stack = S.last.map(x => x.slice()); render(); Sfx.play('chip'); } });
     const dblB = el('button', { class: 'btn sm', text: '×2', onclick: () => { const t = total(); if (!t) return; if (t * 2 > Wallet.cents) { UI.toast('No tienes saldo para doblar', 'bad'); return; } for (const [k, v] of S.bets) { S.bets.set(k, v * 2); S.stack.push([k, v]); } render(); Sfx.play('chip'); } });
     side.append(el('span', { class: 'lbl', text: 'Ficha' }), chips, sTot.el, spinB, el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:6px' }, undoB, clrB, repB, dblB), sWin.el,
-      el('p', { style: 'margin:0;font-size:13px;color:var(--muted)', text: SH ? 'Mesa compartida: cuando alguien apuesta hay 5 s para apostar y luego gira para todos' : 'Clic para poner ficha · clic derecho para quitarla' }));
+      el('p', { style: 'margin:0;font-size:13px;color:var(--muted)', text: SH ? 'Mesa compartida: la ruleta gira sola cada 15 s para todos. Pon fichas y pulsa Apostar antes de «No va más»' : 'Clic para poner ficha · clic derecho para quitarla' }));
     if (SH) side.append(table);
     const RT = () => RLN[TK] || { ph: 'idle', bets: [], hist: [] };
-    function drawTable() { const T = RT(); table.innerHTML = ''; table.append(el('span', { class: 'lbl', text: 'En la mesa (' + T.bets.length + ')' })); if (!T.bets.length) table.append(el('span', { style: 'color:var(--muted)', text: 'Nadie ha apostado en esta ronda' })); for (const b of T.bets.slice().sort((a, b) => b.c - a.c)) table.append(el('div', { class: 'row' }, el('span', { text: b.n }), el('span', { class: 'num', text: fmt(b.c) }))); }
+    function drawTable() { const T = RT(); table.innerHTML = '';
+      if (T.ph === 'res' && T.win && T.win.length) { table.append(el('span', { class: 'lbl', text: 'Ganadores de la ronda' })); for (const w of T.win.slice(0, 8)) table.append(el('div', { class: 'row ok' }, el('span', { text: w.n }), el('span', { class: 'num', text: '+' + fmt(w.w) }))); }
+      table.append(el('span', { class: 'lbl', text: 'En la mesa (' + T.bets.length + ')' })); if (!T.bets.length) table.append(el('span', { style: 'color:var(--muted)', text: 'Nadie ha apostado en esta ronda' })); for (const b of T.bets.slice().sort((a, b) => b.c - a.c)) table.append(el('div', { class: 'row' }, el('span', { text: b.n }), el('span', { class: 'num', text: fmt(b.c) }))); }
     const total = () => { let t = 0; for (const v of S.bets.values()) t += v; return t; };
     const mineT = () => { let t = 0; for (const v of S.mine.values()) t += v; return t; };
-    const locked = () => S.spinning || (SH && (RT().ph === 'spin' || RT().ph === 'res'));
+    const locked = () => S.spinning || (SH && RT().ph !== 'bet');
+    const others = () => { const o = new Map(); for (const b of RT().bets) if (b.id !== Net.id) for (const k in b.cells || {}) o.set(k, (o.get(k) || 0) + b.cells[k]); return o; };
     function chipFor(v) { let c = 10; for (const x of this_.CHIPS) if (x <= v) c = x; return c; }
     const this_ = this;
     const short = v => v >= 100000 ? Math.round(v / 100000) + 'k' : v >= 100 ? String(Math.round(v / 10) / 10).replace('.', ',') : '0,' + String(v).padStart(2, '0');
     function render() {
+      const O = SH ? others() : null;
+      if (SH) for (const [k, c] of cells) { const ob = c.querySelector('.ochip'), v = O.get(k); if (!v) { ob && ob.remove(); continue; } if (ob) ob.textContent = short(v); else c.append(el('span', { class: 'ochip', text: short(v), title: 'Fichas de otros jugadores' })); }
       for (const [k, c] of cells) { const old = c.querySelector('.chip'); const v = (S.bets.get(k) || 0) + (S.mine.get(k) || 0); if (!v) { old && old.remove(); continue; } if (old) { old.textContent = short(v); old.className = 'chip c' + chipFor(v); } else c.append(el('span', { class: 'chip c' + chipFor(v), text: short(v) })); }
       sTot.set(fmt(total() + mineT())); spinB.disabled = locked() || !total();
       if (SH) spinB.textContent = total() ? 'Apostar ' + fmt(total()) : mineT() ? 'Apuesta hecha · añade más' : 'Pon fichas y apuesta';
       [undoB, clrB].forEach(b => b.disabled = S.spinning || !total()); repB.disabled = S.spinning || !S.last.length; dblB.disabled = S.spinning || !total();
     }
     function place(key) {
-      if (locked()) { if (SH) UI.toast('La ruleta está girando: espera a la siguiente ronda', ''); return; }
+      if (locked()) { if (SH) UI.toast('No va más: espera a la siguiente ronda', ''); return; }
       if (total() + S.chip > Wallet.cents) { UI.toast('Saldo insuficiente para esa ficha', 'bad'); Sfx.play('error'); return; }
       S.bets.set(key, (S.bets.get(key) || 0) + S.chip); S.stack.push([key, S.chip]); Sfx.play('chip'); render();
     }
@@ -3433,10 +3456,10 @@ Games.roulette = {
     function spin() {
       const tot = total(); if (locked() || !tot) return;
       if (!Wallet.bet(tot, 'roulette')) return;
-      if (SH) { // mesa compartida: la apuesta queda en la mesa y el servidor hace girar la ruleta
-        for (const [k, v] of S.bets) S.mine.set(k, (S.mine.get(k) || 0) + v);
+      if (SH) { // mesa compartida: la apuesta queda en la mesa y la ruleta gira para todos cada 15 s
+        const add = [...S.bets]; for (const [k, v] of add) S.mine.set(k, (S.mine.get(k) || 0) + v);
         S.bets.clear(); S.stack = []; S.last = [...S.mine]; Store.set('rl_last' + K, S.last);
-        Net.transport.send({ t: 'rlbet', k: TK, c: tot }); Sfx.play('chip'); render(); return;
+        Net.transport.send({ t: 'rlbet', k: TK, c: tot, cells: add }); Sfx.play('chip'); FX.float(spinB, '¡Apostado!', '#ffcf5a', 26); render(); return;
       }
       S.last = [...S.bets]; Store.set('rl_last' + K, S.last);
       anim(WHEEL[RNG.int(37)]);
@@ -3482,11 +3505,12 @@ Games.roulette = {
       S.cb = (k, m) => {
         if (k !== TK || !S.alive) return;
         drawTable(); render();
+        if (m.ph === 'closed') { big.textContent = 'NO VA MÁS'; big.className = 'big'; Sfx.play('tick'); }
         if (m.ph === 'spin' && !S.spinning) { S.bets.clear(); S.stack = []; anim(m.n); }
-        if (m.ph === 'bet' && !S.spinning) { big.className = 'big'; }
+        if (m.ph === 'bet' && !S.spinning) { S.mine.clear(); big.className = 'big'; render(); }
       };
       RLN.cbs.add(S.cb);
-      S.cd = setInterval(() => { if (S.spinning) return; const T = RT(); if (T.ph === 'bet') { big.textContent = Math.max(0, (5000 - (performance.now() - T.t0)) / 1000).toFixed(1).replace('.', ','); big.className = 'big'; } }, 100);
+      S.cd = setInterval(() => { if (S.spinning) return; const T = RT(); if (T.ph === 'bet') { const l = Math.max(0, (15000 - (performance.now() - T.t0)) / 1000); big.textContent = l.toFixed(l < 5 ? 1 : 0).replace('.', ','); big.className = 'big' + (l < 5 ? ' rnum-red' : ''); } }, 100);
       S.rlno = c => { for (const [k, v] of S.mine) S.mine.delete(k); Wallet.refund(c, 'roulette'); UI.toast('La ruleta ya había empezado a girar: te devolvemos la apuesta', ''); render(); };
     }
     render();
@@ -3553,6 +3577,8 @@ Games.blackjack = {
     function updVals() {
       const dv = value(S.dealer.cards || []); dVal.textContent = S.dealer.cards && S.dealer.cards.length ? (dv.soft && dv.t < 21 && !S.dealer.cards.some(c => c.down) ? `${dv.t - 10}/${dv.t}` : dv.t) : '–';
       S.hands.forEach((h, i) => { const v = value(h.cards); h.valEl.textContent = v.soft && v.t < 21 ? `${v.t - 10}/${v.t}` : v.t; h.wrap.classList.toggle('act', i === S.active && S.round); });
+      const cs = cc => (cc || []).map(c => c.down ? '??' : c.r + c.s).join(' ');
+      Live.set({ dl: cs(S.dealer.cards) + ' (' + dVal.textContent + ')', hd: S.hands.map(h => cs(h.cards) + ' = ' + h.valEl.textContent).join('  |  ') });
     }
     function newHandUI(bet) { const wrap = el('div', { class: 'hwrap' }), handEl = el('div', { class: 'hand' }), valEl = el('span', { class: 'hval', text: '0' }), resEl = el('span', { class: 'hres', hidden: true }); const betEl = el('span', { class: 'pill num', text: fmt(bet) }); wrap.append(handEl, el('div', { style: 'display:flex;gap:6px;align-items:center' }, valEl, betEl), resEl); handsEl.append(wrap); return { wrap, handEl, valEl, resEl, betEl }; }
     function buttons() {
@@ -4007,6 +4033,7 @@ Games.fruit = {
       bulbAnim('spin');
       await reels.spin(grid, { durs: [700, 1000, 1300], extra: [0, 0, tease ? .9 : 0], onStop: c => { if (c === 1 && tease) Sfx.play('spin'); } });
       if (!S.alive) return;
+      Live.set({ grid: grid.map(c => c.slice()) });
       const r = fruitEval(M, grid, S.lines), won = r.total * coin;
       if (won > 0) {
         Wallet.pay(won, 'fruit'); lcdWin.textContent = fmt(won, false); bulbAnim('win');
@@ -4077,6 +4104,7 @@ Games.slots = {
       Sfx.play('spin');
       await reels.spin(grid, { durs: [650, 850, 1050, 1250, 1450], extra, onStop: c => { if (grid[c].includes(T.scatter)) Sfx.play('pop'); } });
       if (!S.alive) return;
+      Live.set({ grid: grid.map(c => c.slice()) });
       const r = slotEval(T, grid), mult = free ? T.fsMult : 1;
       let won = Math.round(r.line * bet / 20 * mult + r.scatterPay * bet * mult);
       const cells = new Set(); r.wins.forEach(w => w.cells.forEach(([c, rr]) => cells.add(c + ',' + rr)));
@@ -4457,10 +4485,11 @@ const LIMITS = {
 const bjLadder = max => { const l = []; for (let v = 100; v <= max; v *= 10) l.push(v, v * 2.5, v * 5); return l.filter(x => x <= max).concat(max).filter((x, i, a) => a.indexOf(x) === i).sort((a, b) => a - b); };
 
 const FLOORS = [
-  { id: 'casino', n: 'Planta Baja', sub: 'Casino: ruleta, blackjack, JetX, Plinko, Mines y tragaperras', need: 0, ex: 15.9, oz: -400 },
-  { id: 'premier', n: 'Salón Premier', sub: 'Video Poker, Rueda Royale, escenario de torneos y restaurante', need: 0, ex: 15.9, oz: -800 },
-  { id: 'vip', n: 'Planta High Roller', sub: 'Mesas de límite alto, concierge y vitrina de trofeos', need: 1, ex: 15.9, oz: -1200 },
-  { id: 'roof', n: 'Azotea y Suite', sub: 'Terraza panorámica, Mesa Oro y Suite Presidencial', need: 2, ex: 15.9, oz: -1600 },
+  { id: 'sotano', lv: '-1', n: 'Sala Neón', sub: 'Gran sala de máquinas: 30 tragaperras, Plinko, Mines, póker, ruletas, blackjack, JetX Arena y Rasca y Gana', need: 0, ex: 15.9, oz: -2000 },
+  { id: 'casino', lv: '0', n: 'Planta Baja', sub: 'Casino: ruleta, blackjack, JetX, Plinko, Mines y tragaperras', need: 0, ex: 15.9, oz: -400 },
+  { id: 'premier', lv: '1', n: 'Salón Premier', sub: 'Video Poker, Rueda Royale, escenario de torneos y restaurante', need: 0, ex: 15.9, oz: -800 },
+  { id: 'vip', lv: '2', n: 'Planta High Roller', sub: 'Mesas de límite alto, concierge y vitrina de trofeos', need: 1, ex: 15.9, oz: -1200 },
+  { id: 'roof', lv: '3', n: 'Azotea y Suite', sub: 'Terraza panorámica, Mesa Oro y Suite Presidencial', need: 2, ex: 15.9, oz: -1600 },
 ];
 
 const ACHS = [
@@ -4574,9 +4603,9 @@ const Prog = {
   },
   /* --- ranking: solo jugadores reales (los manda el servidor); sin conexión solo apareces tú --- */
   board(kind) {
-    const me = { id: Net.id, n: Settings.name || 'Jugador', net: this.net(), lvl: this.lvl(), best: Wallet.stats.best || 0, tour: this.s.tour.day === dayNo() && this.s.tour.done ? this.s.tour.score : -1, tday: dayNo() };
+    const me = { id: Net.id, n: Settings.name || 'Jugador', bizv: typeof Biz !== 'undefined' ? Biz.assets() : 0, net: this.net(), lvl: this.lvl(), best: Wallet.stats.best || 0, tour: this.s.tour.day === dayNo() && this.s.tour.done ? this.s.tour.score : -1, tday: dayNo() };
     let L = (typeof Top !== 'undefined' ? Top.list : []).filter(r => r.id !== Net.id).concat([me]);
-    const f = { wealth: [r => r.net, r => eur(r.net)], rep: [r => r.lvl, r => 'Nivel ' + r.lvl], win: [r => r.best, r => eur(r.best)], tour: [r => r.tday === dayNo() ? r.tour : -1, r => r.tour + ' pts'] }[kind] || [r => r.net, r => eur(r.net)];
+    const f = { wealth: [r => r.net, r => eur(r.net)], rep: [r => r.lvl, r => 'Nivel ' + r.lvl], win: [r => r.best, r => eur(r.best)], biz: [r => r.bizv || 0, r => eur(r.bizv || 0)], tour: [r => r.tday === dayNo() ? r.tour : -1, r => r.tour + ' pts'] }[kind] || [r => r.net, r => eur(r.net)];
     L = L.filter(r => f[0](r) >= (kind === 'tour' ? 0 : 1) || r.id === Net.id && kind !== 'tour');
     return L.map(r => ({ name: r.n, v: f[0](r), txt: f[1](r), me: r.id === Net.id })).sort((a, b) => b.v - a.v).slice(0, 50);
   },
@@ -4631,7 +4660,7 @@ const Hub = {
       body = `<div class="achs">` + ACHS.map(([id, n, d]) => `<div class="ach ${s.ach[id] ? 'on' : ''}"><b>${s.ach[id] ? '🏆' : '🔒'} ${n}</b><small>${d}</small></div>`).join('') + `</div>`;
     } else {
       const kind = this.rk || 'wealth', rows = P.board(kind);
-      body = `<div class="seg" id="rkSeg">${[['wealth', 'Patrimonio'], ['rep', 'Reputación'], ['win', 'Mayor premio'], ['tour', 'Torneo de hoy']].map(([k, n]) => `<button data-rk="${k}" class="${kind === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+      body = `<div class="seg" id="rkSeg">${[['wealth', 'Patrimonio'], ['rep', 'Reputación'], ['win', 'Mayor premio'], ['biz', 'Empresarios'], ['tour', 'Torneo de hoy']].map(([k, n]) => `<button data-rk="${k}" class="${kind === k ? 'on' : ''}">${n}</button>`).join('')}</div>
         <div class="board2">` + rows.map((r, i) => `<div class="rk ${r.me ? 'me' : ''}"><i>${i + 1}</i><b>${esc(r.name)}${r.me ? ' (tú)' : ''}</b><span class="num">${r.txt}</span></div>`).join('') + `</div>
         <p class="note">${Net.mode === 'online' ? 'Jugadores reales de este servidor. Se guarda y se actualiza solo.' : 'Sin conexión: abre el juego desde la dirección del servidor para ver a los demás jugadores.'}</p>`;
     }
@@ -4648,7 +4677,7 @@ const Elevator = {
     Prog.rollDay();
     const rows = FLOORS.map((f, i) => {
       const ok = Prog.memOk(f.need), cur = f.id === from;
-      return `<div class="rowx ${ok ? '' : 'lock'}"><div><b>P${i} · ${f.n}</b><small>${f.sub}</small>${ok ? '' : `<small>Requiere membresía ${MEMS[f.need].n} (Recepción, planta baja)</small>`}</div>
+      return `<div class="rowx ${ok ? '' : 'lock'}"><div><b>P${f.lv} · ${f.n}</b><small>${f.sub}</small>${ok ? '' : `<small>Requiere membresía ${MEMS[f.need].n} (Recepción, planta baja)</small>`}</div>
         <button class="btn sm ${cur ? '' : 'go'}" data-f="${f.id}" ${cur || !ok ? 'disabled' : ''}>${cur ? 'Estás aquí' : ok ? 'Ir' : '🔒'}</button></div>`;
     }).reverse().join('');
     UI.modal(`<h2>Ascensor</h2>${rows}<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`, c => {
@@ -4689,7 +4718,7 @@ Games.vpoker = {
     <li>Repartimos 5 cartas. Pulsa las que quieras <b>retener</b> (o las teclas <b>1–5</b>) y pide <b>Cambiar</b> para sustituir el resto.</li>
     <li>Cobras desde <b>pareja de Jotas</b> en adelante. La tabla de premios multiplica tu apuesta.</li>
     <li>Es un juego de habilidad: con la mejor estrategia el retorno teórico es ≈ 98 %.</li>
-    <li>En el <b>torneo diario</b> juegas 10 manos con fichas de torneo (sin tocar tu saldo) y compites contra los Rivales de la casa.</li>
+    <li>En el <b>torneo diario</b> juegas 10 manos con fichas de torneo (sin tocar tu saldo) y compites con los demás jugadores.</li>
     <li>Atajos: <b>Espacio</b> repartir/cambiar · <b>1–5</b> retener.</li></ul>`,
   mount(body, o) {
     o = o || {}; const T = !!o.tour;
@@ -4705,7 +4734,7 @@ Games.vpoker = {
     const go = el('button', { class: 'btn primary wide', text: 'Repartir', onclick: () => act() });
     const sLast = statBox(T ? 'Puntos del torneo' : 'Última mano'), sHands = statBox(T ? 'Mano' : 'Manos jugadas', T ? '0 / 10' : '0');
     side.append(go, sLast.el, sHands.el);
-    if (T) { side.append(el('p', { style: 'margin:0;font-size:13px;color:var(--muted)', text: 'Cada mano vale 100 puntos de torneo. Premios: 1º 50 €, 2º 25 €, 3º 15 €, 4º y 5º 8 €.' })); sLast.set('0'); }
+    if (T) { side.append(el('p', { style: 'margin:0;font-size:13px;color:var(--muted)', text: 'Cada mano vale 100 puntos de torneo. Premios por puntos (2.000+ → 50 €). 1º 50 €, 2º 25 €, 3º 15 €, 4º y 5º 8 €.' })); sLast.set('0'); }
     function toggle(i) { if (S.phase !== 'hold' || S.busy) return; S.held[i] = !S.held[i]; slots[i].classList.toggle('held', S.held[i]); Sfx.play('chip'); }
     function put(i, c, delay) {
       const e = pokerCardEl(c); slots[i].querySelector('.card')?.remove(); slots[i].append(e); c.el = e;
@@ -4722,14 +4751,14 @@ Games.vpoker = {
       slots.forEach(s => s.classList.remove('held')); msg.textContent = 'ELIGE LAS CARTAS QUE QUIERES RETENER'; go.textContent = 'Cambiar'; go.disabled = true;
       slots.forEach(s => s.querySelector('.card')?.remove());
       await Promise.all(S.hand.map((c, i) => put(i, c, 120 + i * 140)));
-      if (!S.alive) return; S.phase = 'hold'; S.busy = false; go.disabled = false;
+      if (!S.alive) return; S.phase = 'hold'; S.busy = false; go.disabled = false; Live.set({ cards: S.hand.map(c => c.r + c.s).join(' '), res: '' });
       const r = vpEval(S.hand); if (r >= 0) { rows[r].classList.add('hit'); msg.textContent = VP_PAY[r][0].toUpperCase() + ' · ¿RETIENES?'; }
     }
     async function draw() {
       S.busy = true; go.disabled = true; const news = [];
       for (let i = 0; i < 5; i++) if (!S.held[i]) { S.hand[i] = S.deck.shift(); news.push(put(i, S.hand[i], 80 + news.length * 150)); }
       await Promise.all(news); if (!S.alive) return;
-      const r = vpEval(S.hand), m = r >= 0 ? VP_PAY[r][1] : 0, win = m * S.bet; S.n++;
+      const r = vpEval(S.hand), m = r >= 0 ? VP_PAY[r][1] : 0, win = m * S.bet; S.n++; Live.set({ cards: S.hand.map(c => c.r + c.s).join(' '), res: r >= 0 ? VP_PAY[r][0].toUpperCase() : 'SIN PREMIO' });
       rows.forEach(x => x.classList.remove('hit')); if (r >= 0) rows[r].classList.add('hit');
       Prog.s.c.vp++; Prog.ev('vp'); if (r === 0) Prog.s.c.royal++;
       if (T) {
@@ -4936,7 +4965,7 @@ function buildFloor(cfg, content) {
       const [gx, gz] = xfPt(OX + lx, OZ + lz, ry, 0, .8); gl8.add(gx, 1.8, gz, accent, .22); gl3.add(tx, 2.62, tz, accent, .3);
       sc.colliders.push(rotAABB(OX + lx, OZ + lz, ry, -.7, -.5, .7, .62));
       const [ix, iz] = xfPt(OX + lx, OZ + lz, ry, 0, 1.5);
-      sc.interact.push({ x: ix, z: iz, r: 1.45, label, sub, fn });
+      sc.interact.push({ x: ix, z: iz, r: 1.45, label, sub, fn }); liveTex(sc, tex, ix, iz);
     };
     /* Barra con camarero */
     k.bar = (x, z, accent = '#c04aff') => {
@@ -4959,7 +4988,7 @@ function buildFloor(cfg, content) {
       gl3.add(OX + 15.9, 4.3, OZ - 12.5, '#fff6e0', .7);
       const mk = (x) => { const m = plane(1.18, 3.0, ctex(64, 128, g => { const gr = g.createLinearGradient(0, 0, 64, 0); gr.addColorStop(0, '#9aa0aa'); gr.addColorStop(.5, '#e8ecf2'); gr.addColorStop(1, '#8a909a'); g.fillStyle = gr; g.fillRect(0, 0, 64, 128); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(31, 0, 2, 128); }).tex, { double: true }); m.position.set(OX + x, 1.55, OZ - 11.42); sc.group.add(m); return m; };
       const dl = mk(15.3), dr = mk(16.5);
-      const ind = makeAnimTex(sc, 256, 64, (g, w, h, t) => { g.fillStyle = '#080a10'; g.fillRect(0, 0, w, h); neonText(g, 'P' + fi, 70, 34, 34, '#fff', '#3df58a'); neonText(g, Math.floor(t * 2) % 2 ? '▲▼' : '▲ ▼', 190, 34, 30, '#ffcf5a', '#ff9f1c'); }, .5);
+      const ind = makeAnimTex(sc, 256, 64, (g, w, h, t) => { g.fillStyle = '#080a10'; g.fillRect(0, 0, w, h); neonText(g, 'P' + FLOORS[fi].lv, 70, 34, 34, '#fff', '#3df58a'); neonText(g, Math.floor(t * 2) % 2 ? '▲▼' : '▲ ▼', 190, 34, 30, '#ffcf5a', '#ff9f1c'); }, .5);
       { const p = plane(2.4, .6, ind); p.position.set(OX + 15.9, 3.55, OZ - 11.32); sc.group.add(p); }
       k.sign('ASCENSORES', '#3df58a', 3.4, [15.9, 4.25, -11.3], 0, null, .08);
       upd.push((dt, t, pl) => {
@@ -5495,7 +5524,7 @@ const Style = {
   wardrobe() {
     const draw = c => {
       const s = this.st();
-      c.innerHTML = `<h2>Armario</h2><p class="note">Colección: ${this.count()} prendas · valor ${eur(this.value())}. Gestos: <kbd>G</kbd> saludar · <kbd>B</kbd> bailar · <kbd>R</kbd> mirar el reloj · <kbd>T</kbd> posar.</p>
+      c.innerHTML = `<h2>Armario</h2><p class="note">Colección: ${this.count()} prendas · valor ${eur(this.value())}. Gestos: <kbd>G</kbd> saludar · <kbd>B</kbd> bailar · <kbd>R</kbd> mirar el reloj · <kbd>P</kbd> posar.</p>
         <h3>Conjuntos guardados</h3>` + s.sets.map((o, k) => `<div class="rowx"><div><b>Conjunto ${k + 1}</b><small>${o ? Object.values(o).filter(id => ITEM[id] && ITEM[id].price).map(id => ITEM[id].name).slice(0, 4).join(' · ') || 'Básico' : 'Vacío'}</small></div><div style="display:flex;gap:6px"><button class="btn sm" data-save="${k}">Guardar actual</button><button class="btn sm go" data-load="${k}" ${o ? '' : 'disabled'}>Ponerme</button></div></div>`).join('') +
         SLOTS.map(([sl, n]) => { const own = ITEMS.filter(i => i.slot === sl && s.own[i.id]); return `<h3>${n}</h3><div class="shopg">${own.map(i => this.card(i, s.eq, false)).join('')}</div>`; }).join('') +
         `<div class="acts"><button class="btn primary" id="mOk">Cerrar</button></div>`;
@@ -5533,6 +5562,10 @@ const PLACES = [
   { id: 'sur', n: 'Calle del Comercio', sub: 'Negocios en venta · Distrito Sur', x: .42, y: .88, w: [0, 76.5] },
   { id: 'sur', n: 'Playa del Neón', sub: 'Paseo marítimo y chiringuito', x: .36, y: .96, w: [-14, 107] },
   { id: 'sur', n: 'Parque Central', sub: 'Lago, columpios y bancos', x: .2, y: .8, w: [-51, 50] },
+  { id: 'norte', n: 'Neon Park', sub: 'Noria, carrusel y tiro al blanco · detrás del casino', x: .42, y: .1, w: [0, -45] },
+  { id: 'norte', n: 'Karting Neón', sub: 'Carreras de karts', x: .42, y: .03, w: [0, -76.5] },
+  { id: 'norte', n: 'Salón recreativo', sub: 'Neon Snake', x: .2, y: .1, w: [-40, -52] },
+  { id: 'club', n: 'Discoteca Pulse', sub: 'Pista de baile, DJ y barra · Calle del Comercio', x: .32, y: .92, w: [-18.5, 104] },
   { id: null, n: 'Aeropuerto', sub: 'PRÓXIMAMENTE', x: .93, y: .2, soon: true },
   { id: null, n: 'Montañas', sub: 'PRÓXIMAMENTE', x: .1, y: .12, soon: true },
 ];
@@ -5569,7 +5602,7 @@ const Phone = {
   head(t) { return `<div class="ph-head"><button class="ph-back" data-go="home">‹</button><h4>${t}</h4></div>`; },
   go(app) {
     this.app = app; const B = $('#phB'), s = this.st();
-    const apps = [['map', 'Mapa', '🗺️', '#2fbf71'], ['bank', 'Banco', '💳', '#d9a21a'], ['msg', 'Mensajes', '💬', '#1ea0d0'], ['ward', 'Armario', '👕', '#d02a7a'], ['rank', 'Ranking', '🏆', '#e0801a'], ['prof', 'Perfil', '⭐', '#8a3ad0'], ['news', 'Noticias', '📰', '#3a6ad0'], ['emo', 'Gestos', '🕺', '#3aa08a'], ['garage', 'Garaje', '🚗', '#c0392b'], ['race', 'Carreras', '🏁', '#222838'], ['jobs', 'Trabajos', '💼', '#3a7a3a'], ['biz', 'Negocios', '🏪', '#2a9a8a'], ['city', 'Alcaldía', '🏛️', '#6a5acd'], ['cfg', 'Ajustes', '⚙️', '#5a6070']];
+    const apps = [['map', 'Mapa', '🗺️', '#2fbf71'], ['bank', 'Banco', '💳', '#d9a21a'], ['msg', 'Mensajes', '💬', '#1ea0d0'], ['ward', 'Armario', '👕', '#d02a7a'], ['rank', 'Ranking', '🏆', '#e0801a'], ['prof', 'Perfil', '⭐', '#8a3ad0'], ['news', 'Noticias', '📰', '#3a6ad0'], ['emo', 'Gestos', '🕺', '#3aa08a'], ['garage', 'Garaje', '🚗', '#c0392b'], ['race', 'Carreras', '🏁', '#222838'], ['contacts', 'Contactos', '👥', '#1a8ad0'], ['jobs', 'Trabajos', '💼', '#3a7a3a'], ['biz', 'Negocios', '🏪', '#2a9a8a'], ['city', 'Alcaldía', '🏛️', '#6a5acd'], ['cfg', 'Ajustes', '⚙️', '#5a6070']];
     let h = '';
     if (app === 'home') {
       h = `<div class="ph-clock"><b>${Env.timeStr()}</b><span>${World.scene.label} · ${eur(Wallet.cents)}</span></div><div class="ph-grid">` +
@@ -5606,6 +5639,7 @@ const Phone = {
         `<p class="note" style="font-size:11px">Más modelos en la tienda fnac de Salera.</p><button class="btn wide" data-go="gamecfg">Ajustes del juego</button>`;
     } else if (app === 'ward') { this.toggle(false); Style.wardrobe(); return; }
     else if (app === 'rank') { this.toggle(false); Hub.open('rank'); return; }
+    else if (app === 'contacts') { this.toggle(false); Contacts.modal(); return; }
     else if (app === 'jobs') { this.toggle(false); Jobs.board(); return; }
     else if (app === 'biz') { this.toggle(false); Biz.panel(); return; }
     else if (app === 'city') { this.toggle(false); City.modal(); return; }
@@ -6090,8 +6124,9 @@ Net.receive = function (m) {
     this.ver = m.v; return;
   }
   if (m && m.t === 'feed') { Feed.add(m); return; }
-  if (m && m.t === 'rl') { RLN[m.k] = { ph: m.ph, t0: performance.now() - m.el, n: m.n, bets: m.bets || [], hist: m.hist || [] }; RLN.cbs.forEach(f => f(m.k, m)); return; }
+  if (m && m.t === 'rl') { RLN[m.k] = { ph: m.ph, t0: performance.now() - m.el, n: m.n, bets: m.bets || [], hist: m.hist || [], win: m.win || [] }; RLN.cbs.forEach(f => f(m.k, m)); return; }
   if (m && m.t === 'rlno') { const S = Games.roulette.S; if (S && S.alive && S.rlno) S.rlno(m.c); return; }
+  if (m && m.t === 'live') { if (m.d) Live.map.set(m.k, { g: m.g, n: m.n, d: m.d, at: performance.now() }); else Live.map.delete(m.k); Live.refresh(m.k); return; }
   if (m && m.t === 'occ') { Occ.map = new Map(m.list.map(([k, id, n]) => [k, { id, n }])); return; }
   if (m && m.t === 'occno') { if (UI.panelMachine === m.k) { UI.panelMachine = null; UI.close(true); UI.toast('Esta máquina la está usando ' + m.n + '. Busca otra libre.', 'bad'); } return; }
   if (m && m.t === 'jx') { JXN.ph = m.ph; JXN.t0 = performance.now() - m.el; JXN.r = m.r; JXN.crash = m.crash || 0; JXN.hist = m.hist || []; JXN.cb && JXN.cb('jx', m); return; }
@@ -6360,63 +6395,82 @@ ACHS.push(['home1', 'Propietario', 'Compra tu primera casa', () => Homes.count()
 const Top = {
   list: Store.get('topcache', []),
   set(l) { this.list = l || []; Store.set('topcache', this.list.slice().sort((a, b) => b.net - a.net).slice(0, 100)); Bus.emit('top'); },
-  me() { const t = Prog.s.tour; return { t: 'stats', net: Prog.net(), lvl: Prog.lvl(), best: Wallet.stats.best || 0, tour: t.day === dayNo() && t.done ? t.score : -1, tday: dayNo() }; },
+  me() { const t = Prog.s.tour; return { t: 'stats', net: Prog.net(), lvl: Prog.lvl(), best: Wallet.stats.best || 0, tour: t.day === dayNo() && t.done ? t.score : -1, tday: dayNo(), bizv: Biz.assets(), homes: typeof Homes !== 'undefined' ? Homes.count() : 0 }; },
   send(force) { if (Net.mode !== 'online') return; const m = this.me(), k = JSON.stringify(m); if (!force && k === this.lastK) return; this.lastK = k; Net.transport.send(m); },
 };
 
-/* ---------------- Alcaldía ---------------- */
+/* ---------------- Alcaldía y gobierno ---------------- */
 const BONUS_TXT = { wage: 'Sueldos de BURGER BOOM +50 %', biz: 'Ingresos de negocios +25 %', xp: 'Reputación ganada +25 %' };
+const CASINO_GAMES = new Set(['roulette', 'blackjack', 'plinko', 'mines', 'jetx', 'fruit', 'slots', 'vpoker', 'wheel', 'scratch']);
 const City = {
-  mayor: Store.get('mayorcache', null), el: null,
+  mayor: Store.get('mayorcache', null), el: null, gov: null, myVote: null,
   bonus(k) { return !!(this.mayor && this.mayor.bonus === k); },
   isMe() { return !!(this.mayor && this.mayor.id === Net.id); },
   set(m) {
-    this.mayor = m.mayor; this.el = m.el; this.elAt = performance.now(); Store.set('mayorcache', this.mayor);
+    this.mayor = m.mayor; this.el = m.el; this.gov = m.gov; this.elAt = performance.now(); Store.set('mayorcache', this.mayor);
     if (this.plaque) this.drawPlaque(); Bus.emit('city');
-    if (this.modalOpen) this.draw(this.modalOpen);
+    if (this.modalOpen && this.modalOpen.isConnected && !this.modalOpen.contains(document.activeElement)) this.draw(this.modalOpen);
   },
   left() { return this.el ? Math.max(0, this.el.left - (performance.now() - this.elAt)) : 0; },
+  leftTxt() { const l = this.left(), d = Math.floor(l / 864e5), h = Math.floor(l % 864e5 / 36e5), m = Math.floor(l % 36e5 / 6e4); return (d ? d + ' d ' : '') + (d || h ? h + ' h ' : '') + m + ' min'; },
   drawPlaque() {
     const { cv, tex } = this.plaque, g = cv.getContext('2d'); g.fillStyle = '#1a1420'; g.fillRect(0, 0, 512, 128); g.strokeStyle = '#c89a3a'; g.lineWidth = 6; g.strokeRect(5, 5, 502, 118);
     g.textAlign = 'center'; g.fillStyle = '#ffcf5a'; g.font = `30px ${FONT_D}`; g.fillText('ALCALDE DE LA CIUDAD', 256, 44);
     g.fillStyle = '#fff'; g.font = `bold 40px ${FONT_U}`; g.fillText(this.mayor ? '👑 ' + this.mayor.n : 'Sin alcalde · ¡preséntate!', 256, 96); tex.needsUpdate = true;
   },
-  modal() {
-    UI.modal('', c => { this.modalOpen = c; this.draw(c); }); $('#modal').classList.add('right');
-    UI.onClose = () => { this.modalOpen = null; };
-  },
+  modal() { UI.modal('', c => { this.modalOpen = c; this.draw(c); }); $('#modal').classList.add('right'); UI.onClose = () => { this.modalOpen = null; }; },
   draw(c) {
-    if (!c.isConnected) { this.modalOpen = null; return; }
-    const on = Net.mode === 'online', e = this.el, m = this.mayor, mins = Math.ceil(this.left() / 60000);
-    const myVote = e && e.voted ? e.voted[Net.id] : null, running = e && e.cands.some(x => x.id === Net.id);
+    const on = Net.mode === 'online', e = this.el, m = this.mayor, g = this.gov, running = e && e.cands.some(x => x.id === Net.id), mine = running && e.cands.find(x => x.id === Net.id);
+    const eu = v => fmt(v || 0);
     c.innerHTML = `<h2>Ayuntamiento</h2>
       <div class="hm-row"><span>Alcalde actual</span><b>${m ? '👑 ' + esc(m.n) : 'Nadie todavía'}</b></div>
-      ${m ? `<div class="hm-row"><span>Lema</span><b>«${esc(m.slogan)}»</b></div><div class="hm-row"><span>Ventaja para toda la ciudad</span><b>${BONUS_TXT[m.bonus]}</b></div>` : ''}
-      ${!on ? '<p class="note">Las elecciones son entre jugadores reales. Abre el juego desde la dirección del servidor para votar o presentarte.</p>' : `
-      <h3 style="margin:14px 0 4px">Elecciones · cierran en ${mins} min</h3>
-      <div class="hm-list">${e.cands.length ? e.cands.slice().sort((a, b) => b.v - a.v).map(x => `<div class="hm-row"><span><b>${esc(x.n)}</b><br><small style="color:var(--muted)">«${esc(x.slogan)}» · ${BONUS_TXT[x.bonus]}</small></span><span>${x.v} voto${x.v === 1 ? '' : 's'} ${myVote === x.id ? '<span class="tag ok">Tu voto</span>' : `<button class="btn sm primary" data-vote="${x.id}">Votar</button>`}</span></div>`).join('') : '<p class="note">Aún no hay candidatos. ¡Sé el primero!</p>'}</div>
-      ${running ? '<p class="note">Ya eres candidato en estas elecciones. ¡Pide el voto a los demás!</p>' : `
+      ${m ? `<div class="hm-row"><span>Lema</span><b>«${esc(m.slogan)}»</b></div><div class="hm-row"><span>Ventaja de ciudad</span><b>${BONUS_TXT[m.bonus]}</b></div>` : ''}
+      ${!on ? '<p class="note">Las elecciones y el gobierno son entre jugadores reales. Abre el juego desde la dirección del servidor.</p>' : `
+      <h3 style="margin:14px 0 4px">Gobierno municipal</h3>
+      <div class="hm-row"><span>Tesoro municipal</span><b>${eu(g.treasury)}</b></div>
+      <div class="hm-row"><span>Impuesto sobre premios del casino</span><b>${g.tax} %</b></div>
+      <div class="hm-row"><span>Extra en premios (lo paga el ayuntamiento)</span><b>${g.prize} %</b></div>
+      <div class="hm-row"><span>Ayuda diaria a cada ciudadano</span><b>${eu(g.aid)} ${g.aid ? '<button class="btn sm primary" id="aidB">Cobrar</button>' : ''}</b></div>
+      <div class="hm-row"><span>Sueldo del alcalde</span><b>${eu(g.salary)} / hora</b></div>
+      ${this.isMe() ? `<div class="gov-ed"><b>Tus decisiones como alcalde</b>
+        ${[['tax', 'Impuesto premios (%)', 1], ['prize', 'Extra premios (%)', 1], ['aid', 'Ayuda diaria (€)', 100], ['salary', 'Tu sueldo (€/h)', 100]].map(([k, n, d]) => `<label>${n}<input type="range" data-g="${k}" min="${g.lim[k][0] / d}" max="${g.lim[k][1] / d}" step="1" value="${g[k] / d}"><span>${g[k] / d}</span></label>`).join('')}
+        <div class="seg" id="mySeg">${Object.entries(BONUS_TXT).map(([k, t]) => `<button data-mb="${k}" class="${m.bonus === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+        <button class="btn primary" id="govB">Aplicar decisiones</button><small style="color:var(--muted)">Subir impuestos llena el tesoro (y tu sueldo); bajar impuestos o dar ayudas ayuda a la gente. Todos lo verán en las noticias.</small></div>` : ''}
+      ${g.log.length ? '<details><summary>Historial de decisiones</summary>' + g.log.map(l => `<div class="hm-row"><small>${esc(l.txt)}</small></div>`).join('') + '</details>' : ''}
+      <h3 style="margin:14px 0 4px">Elecciones · cierran en ${this.leftTxt()} (domingo 20:00)</h3>
+      <p class="note" style="margin:0 0 6px">Voto secreto: nadie sabe a quién votas. ${e.total} voto${e.total === 1 ? '' : 's'} emitidos.</p>
+      <div class="hm-list">${e.cands.length ? e.cands.slice().sort((a, b) => b.v - a.v || b.fund - a.fund).map((x, i) => `<div class="hm-row"><span><b>${i + 1}. ${esc(x.n)}</b>${x.fund ? ' <span class="tag">📣 ' + eu(x.fund) + '</span>' : ''}<br><small style="color:var(--muted)">«${esc(x.slogan)}» · ${BONUS_TXT[x.bonus]}</small></span><span>${x.v} voto${x.v === 1 ? '' : 's'} ${this.myVote === x.id ? '<span class="tag ok">Tu voto</span>' : `<button class="btn sm primary" data-vote="${x.id}">Votar</button>`}</span></div>`).join('') : '<p class="note">Aún no hay candidatos. ¡Sé el primero!</p>'}</div>
+      ${running ? `<p class="note">Eres candidato. Puedes financiar tu campaña (carteles y visibilidad, no compra votos; máximo 1.000 €). Llevas ${eu(mine.fund)}.</p><div class="hm-act"><button class="btn" data-fund="5000">+50 €</button><button class="btn" data-fund="20000">+200 €</button></div>` : `
       <h3 style="margin:14px 0 4px">Presentarte (100 €)</h3>
-      <input id="slg" maxlength="40" placeholder="Tu lema de campaña" style="width:100%;padding:9px;border-radius:9px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:#fff">
+      <input id="slg" maxlength="40" placeholder="Tu lema de campaña" class="inp">
       <div class="seg" id="bnSeg" style="margin:8px 0">${Object.entries(BONUS_TXT).map(([k, t], i) => `<button data-b="${k}" class="${i ? '' : 'on'}">${t}</button>`).join('')}</div>
-      <button class="btn primary" id="runB" ${Wallet.cents < 10000 ? 'disabled' : ''}>Presentarme · 100 €</button>`}
-      ${this.isMe() ? `<h3 style="margin:14px 0 4px">Eres el alcalde</h3><p class="note">Cobras 200 € cada 10 minutos de juego. Puedes cambiar la ventaja de la ciudad:</p><div class="seg" id="mySeg">${Object.entries(BONUS_TXT).map(([k, t]) => `<button data-mb="${k}" class="${m.bonus === k ? 'on' : ''}">${t}</button>`).join('')}</div>` : ''}`}
-      <p class="note">Cada elección dura 30 minutos. Gana quien tenga más votos y su ventaja se aplica a todos los jugadores. Un voto por jugador.</p>
+      <button class="btn primary" id="runB" ${Wallet.cents < 10000 ? 'disabled' : ''}>Presentarme · 100 €</button>`}`}
       <div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
     c.querySelector('#mOk').onclick = () => UI.closeModal();
     const slg = c.querySelector('#slg'); if (slg) slg.addEventListener('keydown', ev => ev.stopPropagation());
-    let bonus = 'wage';
+    let bonus = 'wage', mb = m && m.bonus;
     $$('#bnSeg button', c).forEach(b => b.onclick = () => { $$('#bnSeg button', c).forEach(x => x.classList.remove('on')); b.classList.add('on'); bonus = b.dataset.b; });
-    $$('[data-vote]', c).forEach(b => b.onclick = () => { Net.transport.send({ t: 'vote', id: b.dataset.vote }); Sfx.play('chip'); UI.toast('¡Voto enviado!', 'good'); });
-    $$('[data-mb]', c).forEach(b => b.onclick = () => { Net.transport.send({ t: 'mayorset', bonus: b.dataset.mb }); Sfx.play('chip'); });
+    $$('[data-mb]', c).forEach(b => b.onclick = () => { $$('[data-mb]', c).forEach(x => x.classList.remove('on')); b.classList.add('on'); mb = b.dataset.mb; });
+    $$('[data-g]', c).forEach(r => r.oninput = () => { r.nextElementSibling.textContent = r.value; });
+    const gb = c.querySelector('#govB'); gb && (gb.onclick = () => { const o = { t: 'gov', bonus: mb }; $$('[data-g]', c).forEach(r => o[r.dataset.g] = +r.value * ({ aid: 100, salary: 100 }[r.dataset.g] || 1)); Net.transport.send(o); UI.toast('Decisiones aprobadas', 'good'); Sfx.play('chip'); });
+    $$('[data-vote]', c).forEach(b => b.onclick = () => { Net.transport.send({ t: 'vote', id: b.dataset.vote }); this.myVote = b.dataset.vote; Sfx.play('chip'); UI.toast('¡Voto secreto enviado!', 'good'); this.draw(c); });
+    $$('[data-fund]', c).forEach(b => b.onclick = () => { const v = +b.dataset.fund; if (!Wallet.spend(v, 'Campaña electoral')) return; Net.transport.send({ t: 'fund', c: v }); Sfx.play('chip'); });
+    const ab = c.querySelector('#aidB'); ab && (ab.onclick = () => Net.transport.send({ t: 'aid' }));
     const rb = c.querySelector('#runB'); if (rb) rb.onclick = () => { if (!Wallet.spend(10000, 'Campaña electoral')) return; Net.transport.send({ t: 'run', slogan: slg.value, bonus }); UI.toast('¡Ya eres candidato!', 'good'); Sfx.play('win'); };
   },
 };
+// impuestos y extra del alcalde sobre los premios del casino (solo en el mundo compartido)
+{ const _pay = Wallet.pay; Wallet.pay = function (c, game) {
+  const g = City.gov; if (Net.mode !== 'online' || !g || !CASINO_GAMES.has(game) || c <= 0) return _pay.call(this, c, game);
+  const t = Math.floor(c * g.tax / 100), x = g.treasury > 0 ? Math.min(Math.floor(c * g.prize / 100), g.treasury) : 0;
+  if (t || x) { Net.transport.send({ t: 'tax', c: t, x }); g.treasury += t - x; }
+  return _pay.call(this, c - t + x, game);
+}; }
 
-/* ---------------- Negocios ---------------- */
+/* ---------------- Negocios: dueño único (servidor), subastas, ingresos y gastos ---------------- */
 const BIZ = [
-  { id: 'kiosk', n: 'Kiosco Neón', d: 'Prensa, chuches y recargas', p: 150000, r: 18000, col: '#ffcf5a' },
-  { id: 'cafe', n: 'Cafetería Brisa', d: 'Cafés y bocadillos', p: 800000, r: 80000, col: '#3df58a' },
+  { id: 'kiosk', n: 'Kiosco Neón', d: 'Prensa, chuches y recargas', p: 150000, r: 18000, col: '#ffcf5a', first: true },
+  { id: 'cafe', n: 'Cafetería Brisa', d: 'Cafés y bocadillos', p: 800000, r: 80000, col: '#3df58a', first: true },
   { id: 'phones', n: 'Tienda Móvil Pro', d: 'Fundas, cargadores y reparaciones', p: 2500000, r: 220000, col: '#3ff2ff' },
   { id: 'club', n: 'Discoteca Pulse', d: 'La noche más brillante de la ciudad', p: 15000000, r: 1150000, col: '#ff3d9a' },
   { id: 'bowling', n: 'Bolera Strike', d: 'Pistas, recreativos y batidos', p: 9000000, r: 720000, col: '#b45cff' },
@@ -6426,55 +6480,86 @@ const BIZ = [
 ];
 const BIZ_CAP_H = 8, EMP_MAX = 5;
 const Biz = {
+  own: {}, auc: null,
   st() { const s = Prog.s; if (!s.biz) s.biz = {}; return s.biz; },
-  rate(b) { const o = this.st()[b.id]; if (!o) return 0; return Math.round(b.r * (1 + .25 * o.emp) * (City.bonus('biz') ? 1.25 : 1)); },
-  /** Acumula lo ganado desde la última vez (también con el juego cerrado, hasta 8 horas) */
-  tick() { const now = Date.now(); for (const b of BIZ) { const o = this.st()[b.id]; if (!o) continue; const cap = this.rate(b) * BIZ_CAP_H; o.bank = Math.min(cap, (o.bank || 0) + this.rate(b) * Math.max(0, now - o.last) / 36e5); o.last = now; } },
-  pending() { this.tick(); let v = 0; for (const b of BIZ) { const o = this.st()[b.id]; if (o) v += Math.floor(o.bank); } return v; },
+  online() { return Net.mode === 'online'; },
+  owner(id) { return this.online() ? this.own[id] || null : (this.st()[id] ? { owner: Net.id, n: Settings.name } : null); },
+  mine(id) { const o = this.owner(id); return !!(o && o.owner === Net.id && this.st()[id]); },
+  gross(b) { const o = this.st()[b.id]; return o ? b.r * (1 + .25 * o.emp) * (City.bonus('biz') ? 1.25 : 1) : 0; },
+  costs(b) { const o = this.st()[b.id]; return o ? b.r * .15 + o.emp * b.r * .12 : 0; },
+  rate(b) { return Math.max(0, Math.round(this.gross(b) - this.costs(b))); },
+  tick() { const now = Date.now(); for (const b of BIZ) { const o = this.st()[b.id]; if (!o || !this.mine(b.id)) continue; const cap = this.rate(b) * BIZ_CAP_H; o.bank = Math.min(cap, (o.bank || 0) + this.rate(b) * Math.max(0, now - o.last) / 36e5); o.last = now; } },
+  pending() { this.tick(); let v = 0; for (const b of BIZ) if (this.mine(b.id)) v += Math.floor(this.st()[b.id].bank); return v; },
   empCost(b, n) { return Math.round(b.p * .2 * n); },
-  assets() { let v = 0; for (const b of BIZ) { const o = this.st()[b.id]; if (!o) continue; v += b.p; for (let i = 1; i <= o.emp; i++) v += this.empCost(b, i) * .5; } return v; },
-  count() { return Object.keys(this.st()).length; },
+  assets() { let v = 0; for (const b of BIZ) { if (!this.mine(b.id)) continue; const o = this.st()[b.id]; v += b.p; for (let i = 1; i <= o.emp; i++) v += this.empCost(b, i) * .5; } return v; },
+  count() { return BIZ.filter(b => this.mine(b.id)).length; },
   collect(b) { this.tick(); const o = this.st()[b.id], v = Math.floor(o.bank); if (v <= 0) return 0; o.bank -= v; Wallet.earn(v, 'negocio'); Prog.save(); return v; },
-  collectAll() { let v = 0; for (const b of BIZ) if (this.st()[b.id]) v += this.collect(b); if (v) { UI.toast('Has cobrado ' + fmt(v) + ' de tus negocios', 'good'); FX.coins(null, 20); FX.float(null, '+' + fmt(v), '#9dffc4', 40); } else UI.toast('Tus negocios aún no han generado nada nuevo', ''); return v; },
+  collectAll() { let v = 0; for (const b of BIZ) if (this.mine(b.id)) v += this.collect(b); if (v) { UI.toast('Has cobrado ' + fmt(v) + ' de tus negocios', 'good'); FX.coins(null, 20); FX.float(null, '+' + fmt(v), '#9dffc4', 40); } else UI.toast('Tus negocios aún no han generado nada nuevo', ''); return v; },
+  take(b) { this.st()[b.id] = { emp: 0, last: Date.now(), bank: 0 }; Prog.save(); Prog.check(); Prog.render(); },
+  /** mensajes del servidor */
+  onMsg(m) {
+    this.own = m.own || {}; this.auc = m.auc ? Object.assign({}, m.auc, { at: performance.now() }) : null;
+    for (const b of BIZ) { const o = this.own[b.id]; if (o && o.owner === Net.id && !this.st()[b.id]) { this.take(b); UI.toast('🏪 ' + b.n + ' ya es tuyo', 'good'); Sfx.play('win'); } }
+    if (!this.reconciled) { this.reconciled = true; for (const b of BIZ) { if (!this.st()[b.id]) continue; const o = this.own[b.id]; if (o && o.owner === Net.id) continue; if (!o && b.first) Net.transport.send({ t: 'bizclaim', id: b.id }); else this.lost(b.id); } }
+    if (this.modalDraw && this.modalDraw.c.isConnected) this.modalDraw.f(this.modalDraw.c);
+  },
+  lost(id) { const b = BIZ.find(x => x.id === id); if (!b || !this.st()[id]) return; delete this.st()[id]; Wallet.grant(b.p, 'Devolución de ' + b.n); Prog.save(); UI.toast('Ahora cada negocio tiene un solo dueño: ' + b.n + ' ya no es tuyo y te devolvemos ' + fmt(b.p), ''); },
+  aucLeft() { const a = this.auc; if (!a) return ''; const l = Math.max(0, a.left - (performance.now() - a.at)), h = Math.floor(l / 36e5), mi = Math.floor(l % 36e5 / 6e4), se = Math.floor(l % 6e4 / 1e3); return h ? h + ' h ' + mi + ' min' : mi + ' min ' + se + ' s'; },
+  aucHtml() {
+    const a = this.auc; if (!this.online()) return '<p class="note">Las subastas son entre jugadores reales: conéctate al servidor.</p>';
+    if (!a) return '<p class="note">Ahora mismo no hay subasta. Cada día sale a subasta un negocio sin dueño.</p>';
+    const b = BIZ.find(x => x.id === a.id), need = a.top ? Math.ceil(a.top.c * 1.05) : a.min;
+    return `<div class="auc"><b>🔨 Subasta de hoy: ${b.n}</b><div class="hm-row"><span>Precio base / puja mínima</span><b>${fmt(a.min)}</b></div>
+      <div class="hm-row"><span>Puja más alta</span><b>${a.top ? fmt(a.top.c) + ' · ' + esc(a.top.n) + (a.top.id === Net.id ? ' (tú)' : '') : 'Nadie ha pujado'}</b></div>
+      <div class="hm-row"><span>Termina en</span><b>${this.aucLeft()}</b></div>
+      <div class="hm-act"><input class="inp" id="bidIn" type="number" min="${need / 100}" step="1" value="${Math.ceil(need / 100)}" style="width:140px"><button class="btn primary" id="bidB">Pujar</button></div>
+      <small style="color:var(--muted)">El dinero de tu puja queda retenido. Si alguien te supera, se te devuelve. Si nadie puja, el negocio queda sin vender.</small></div>`;
+  },
+  bindAuc(c, redraw) {
+    const i = c.querySelector('#bidIn'), b = c.querySelector('#bidB'); if (!b) return; i.addEventListener('keydown', e => e.stopPropagation());
+    b.onclick = () => { const v = Math.round(+i.value * 100); if (!(v > 0)) return; if (!Wallet.spend(v, 'Puja en subasta')) return; Net.transport.send({ t: 'bid', id: this.auc.id, c: v }); Sfx.play('chip'); UI.toast('Puja enviada: ' + fmt(v), 'good'); };
+  },
   open(id) {
     const b = BIZ.find(x => x.id === id);
     const draw = c => {
-      this.tick(); const o = this.st()[b.id];
-      c.innerHTML = `<h2>${b.n}</h2><p style="color:var(--muted);margin:0 0 10px">${b.d}</p>` + (o ? `
-        <div class="hm-row"><span>Ingresos</span><b>${fmt(this.rate(b))} / hora</b></div>
-        <div class="hm-row"><span>En caja (máx. ${BIZ_CAP_H} h)</span><b class="num" id="bk">${fmt(Math.floor(o.bank))}</b></div>
-        <div class="hm-row"><span>Empleados</span><b>${o.emp} / ${EMP_MAX} · cada uno +25 %</b></div>
-        <div class="hm-act"><button class="btn primary" data-col>Cobrar caja</button>${o.emp < EMP_MAX ? `<button class="btn" data-emp ${Wallet.cents < this.empCost(b, o.emp + 1) ? 'disabled' : ''}>Contratar empleado · ${fmt(this.empCost(b, o.emp + 1))}</button>` : ''}<button class="btn danger" data-sell>Vender · ${fmt(Math.round(b.p * .6))}</button></div>
-        <p class="note">El negocio gana dinero aunque no estés jugando (hasta ${BIZ_CAP_H} horas). Cobra la caja aquí o desde la app Negocios del móvil.${City.bonus('biz') ? ' El alcalde da +25 % a todos los negocios.' : ''}</p>` : `
-        <div class="hm-row"><span>Precio</span><b>${fmt(b.p)}</b></div><div class="hm-row"><span>Gana</span><b>${fmt(b.r)} / hora</b></div>
-        <div class="hm-act"><button class="btn primary" data-buy ${Wallet.cents < b.p ? 'disabled' : ''}>Comprar ${fmt(b.p)}</button></div>
-        <p class="note">Se paga solo en unas ${Math.round(b.p / b.r)} horas. Con empleados gana más.</p>`) + `<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
-      c.querySelector('#mOk').onclick = () => UI.closeModal();
+      this.tick(); const own = this.owner(b.id), mine = this.mine(b.id), o = this.st()[b.id];
+      let h = `<h2>${b.n}</h2><p style="color:var(--muted);margin:0 0 10px">${b.d}</p>`;
+      if (mine) h += `<div class="hm-row"><span>Ingresos</span><b>${fmt(Math.round(this.gross(b)))} / h</b></div><div class="hm-row"><span>Gastos (alquiler y sueldos)</span><b>−${fmt(Math.round(this.costs(b)))} / h</b></div>
+        <div class="hm-row"><span>Beneficio</span><b style="color:#9dffc4">${fmt(this.rate(b))} / h</b></div><div class="hm-row"><span>En caja (máx. ${BIZ_CAP_H} h)</span><b class="num">${fmt(Math.floor(o.bank))}</b></div>
+        <div class="hm-row"><span>Empleados</span><b>${o.emp} / ${EMP_MAX} · +25 % ingresos, +12 % gastos cada uno</b></div>
+        <div class="hm-act"><button class="btn primary" data-col>Cobrar caja</button>${o.emp < EMP_MAX ? `<button class="btn" data-emp ${Wallet.cents < this.empCost(b, o.emp + 1) ? 'disabled' : ''}>Contratar · ${fmt(this.empCost(b, o.emp + 1))}</button>` : ''}<button class="btn danger" data-sell>Vender · ${fmt(Math.round(b.p * .6))}</button></div>`;
+      else if (own) h += `<div class="hm-row"><span>Propietario</span><b>${esc(own.n)}</b></div><p class="note">Este negocio ya tiene dueño. Si lo vende, volverá a salir ${b.first ? 'a la venta' : 'a subasta'}.</p>`;
+      else if (b.first || !this.online()) h += `<div class="hm-row"><span>Precio</span><b>${fmt(b.p)}</b></div><div class="hm-row"><span>Beneficio sin empleados</span><b>${fmt(Math.round(b.r * .85))} / h</b></div>
+        <div class="hm-act"><button class="btn primary" data-buy ${Wallet.cents < b.p ? 'disabled' : ''}>Comprar ${fmt(b.p)}</button></div><p class="note">${this.online() ? 'Solo puede tener un dueño: el primero que lo compre se lo queda.' : ''}</p>`;
+      else h += `<p class="note">Sin dueño. Este negocio se consigue en la <b>subasta diaria</b> (puja mínima ${fmt(b.p)}).</p>` + this.aucHtml();
+      c.innerHTML = h + `<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
+      c.querySelector('#mOk').onclick = () => UI.closeModal(); this.bindAuc(c, draw);
       const q = s => c.querySelector(s);
-      q('[data-buy]') && (q('[data-buy]').onclick = () => { if (!Wallet.spend(b.p, b.n)) return; this.st()[b.id] = { emp: 0, last: Date.now(), bank: 0 }; Prog.save(); Prog.check(); Prog.render(); UI.toast('¡' + b.n + ' es tuyo!', 'good'); Sfx.play('win'); FX.confetti(60); draw(c); });
+      q('[data-buy]') && (q('[data-buy]').onclick = () => { if (!Wallet.spend(b.p, b.n)) return; if (this.online()) { this.pendBuy = b.id; this.st()[b.id] = { emp: 0, last: Date.now(), bank: 0 }; Net.transport.send({ t: 'bizbuy', id: b.id, c: b.p }); } else this.take(b); UI.toast('¡' + b.n + ' es tuyo!', 'good'); Sfx.play('win'); FX.confetti(60); setTimeout(() => c.isConnected && draw(c), 600); });
       q('[data-col]') && (q('[data-col]').onclick = () => { const v = this.collect(b); if (v) { FX.coins(q('[data-col]'), 18); FX.float(q('[data-col]'), '+' + fmt(v), '#9dffc4', 38); } draw(c); });
       q('[data-emp]') && (q('[data-emp]').onclick = () => { const o = this.st()[b.id]; if (!Wallet.spend(this.empCost(b, o.emp + 1), b.n)) return; this.tick(); o.emp++; Prog.save(); Sfx.play('chip'); draw(c); });
-      q('[data-sell]') && (q('[data-sell]').onclick = () => { this.collect(b); delete this.st()[b.id]; Wallet.grant(Math.round(b.p * .6), 'Venta de ' + b.n); Prog.save(); Prog.render(); draw(c); });
+      q('[data-sell]') && (q('[data-sell]').onclick = () => { this.collect(b); delete this.st()[b.id]; if (this.online()) Net.transport.send({ t: 'bizsell', id: b.id }); Wallet.grant(Math.round(b.p * .6), 'Venta de ' + b.n); Prog.save(); Prog.render(); draw(c); });
     };
-    UI.modal('', draw); $('#modal').classList.add('right');
+    UI.modal('', c => { this.modalDraw = { c, f: draw }; draw(c); }); $('#modal').classList.add('right');
   },
   panel() {
     const draw = c => {
-      this.tick(); const mine = BIZ.filter(b => this.st()[b.id]);
-      c.innerHTML = `<h2>Mis negocios</h2>` + (mine.length ? mine.map(b => `<div class="hm-row"><span>${b.n}<br><small style="color:var(--muted)">${fmt(this.rate(b))}/h · ${this.st()[b.id].emp} empleados</small></span><b class="num">${fmt(Math.floor(this.st()[b.id].bank))}</b></div>`).join('') + `<div class="hm-act"><button class="btn primary" data-all>Cobrar todo</button></div>`
-        : '<p class="note">Aún no tienes negocios. Están en la Calle del Comercio y la playa, en el Distrito Sur (bajando por las calles laterales de la plaza).</p>') + `<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
-      c.querySelector('#mOk').onclick = () => UI.closeModal();
+      this.tick(); const mine = BIZ.filter(b => this.mine(b.id));
+      c.innerHTML = `<h2>Mis negocios</h2>` + (mine.length ? mine.map(b => `<div class="hm-row"><span>${b.n}<br><small style="color:var(--muted)">beneficio ${fmt(this.rate(b))}/h · ${this.st()[b.id].emp} empleados</small></span><b class="num">${fmt(Math.floor(this.st()[b.id].bank))}</b></div>`).join('') + `<div class="hm-act"><button class="btn primary" data-all>Cobrar todo</button></div>`
+        : '<p class="note">Aún no tienes negocios. Están en la Calle del Comercio y la playa (Distrito Sur).</p>') +
+        `<h3 style="margin:14px 0 4px">Propietarios de la ciudad</h3>` + BIZ.map(b => { const o = this.owner(b.id); return `<div class="hm-row"><span>${b.n}</span><b>${o ? esc(o.n) : b.first ? 'En venta' : 'Subasta'}</b></div>`; }).join('') +
+        `<h3 style="margin:14px 0 4px">Subasta</h3>` + this.aucHtml() + `<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
+      c.querySelector('#mOk').onclick = () => UI.closeModal(); this.bindAuc(c, draw);
       const a = c.querySelector('[data-all]'); a && (a.onclick = () => { this.collectAll(); draw(c); });
     };
-    UI.modal('', draw);
+    UI.modal('', c => { this.modalDraw = { c, f: draw }; draw(c); });
   },
 };
 ACHS.push(['biz1', 'Empresario', 'Compra tu primer negocio', () => Biz.count() >= 1], ['biz4', 'Magnate', 'Ten 4 negocios a la vez', () => Biz.count() >= 4], ['mayor', 'Alcalde', 'Gana unas elecciones', () => City.isMe()]);
 
-/* Ventajas del alcalde para todos y sueldo del alcalde */
+/* Ventajas del alcalde para todos */
 { const _earn = Wallet.earn; Wallet.earn = function (c, src) { if (src === 'burger' && City.bonus('wage')) c = Math.round(c * 1.5); return _earn.call(this, c, src); }; }
 { const _xp = Prog.addXp; Prog.addXp = function (n, capped) { if (City.bonus('xp')) n = Math.round(n * 1.25); return _xp.call(this, n, capped); }; }
-setInterval(() => { if (City.isMe() && Net.mode === 'online' && document.visibilityState === 'visible') { Wallet.grant(20000, 'Sueldo de alcalde'); UI.toast('👑 Sueldo de alcalde: +200,00 €', 'good'); } }, 600000);
 
 /* Mensajes del servidor */
 {
@@ -6482,10 +6567,17 @@ setInterval(() => { if (City.isMe() && Net.mode === 'online' && document.visibil
   Net.receive = function (m) {
     if (m && m.t === 'top') { Top.set(m.list); return; }
     if (m && m.t === 'city') { City.set(m); return; }
+    if (m && m.t === 'myvote') { City.myVote = m.id; return; }
     if (m && m.t === 'mayornew') { UI.toast('👑 ¡' + m.n + ' es el nuevo alcalde de la ciudad!', 'good'); Sfx.play('bigwin'); return; }
+    if (m && m.t === 'biz') { Biz.onMsg(m); return; }
+    if (m && m.t === 'bizno') { if (Biz.pendBuy === m.id) { delete Biz.st()[m.id]; Biz.pendBuy = null; Prog.save(); } if (m.c) Wallet.grant(m.c, 'Devolución'); UI.toast(m.why, 'bad'); return; }
+    if (m && m.t === 'bizlost') { Biz.lost(m.id); return; }
+    if (m && m.t === 'bidno') { Wallet.grant(m.c, 'Puja rechazada'); UI.toast(m.why, 'bad'); return; }
+    if (m && m.t === 'gift') { Wallet.grant(m.c, m.why || 'Regalo'); UI.toast('💰 ' + (m.why || 'Has recibido dinero') + ': +' + fmt(m.c), 'good'); FX.coins(null, 16); return; }
+    if (m && m.t === 'aidno') { UI.toast(m.why, 'bad'); return; }
     return _r.call(this, m);
   };
-  Bus.on('net', on => { if (!on) return; Net.transport.send({ t: 'seed', list: Top.list }); Top.send(true); });
+  Bus.on('net', on => { if (!on) return; Biz.reconciled = false; Net.transport.send({ t: 'seed', list: Top.list }); Top.send(true); });
   setInterval(() => Top.send(false), 15000);
   Bus.on('wallet', () => { clearTimeout(Top.tm); Top.tm = setTimeout(() => Top.send(false), 3000); });
 }
@@ -6577,10 +6669,15 @@ function buildSur() {
       for (let x = x0 + .6; x < x1 - .4; x += .9) gl1.add(x, 3.28, za, b.col, .3);
       k.sign(b.n.toUpperCase(), b.col, Math.min(8, x1 - x0 - 2), [cx, h - 1.3 > 4.2 ? 4.2 : h - .8, zf + dir * .07], dir < 0 ? Math.PI : 0, null, .4);
       gl8.add(cx, 3, zf + dir * 1.2, b.col, .3);
-      sc.interact.push({ x: cx, z: zf + dir * 2, r: 2.2, get label() { return b.n; }, get sub() { const o = Biz.st()[b.id]; return o ? 'Tu negocio · ' + fmt(Biz.rate(b)) + '/h · caja ' + fmt(Math.floor((Biz.tick(), o.bank))) : 'En venta · ' + fmt(b.p) + ' · gana ' + fmt(b.r) + '/h'; }, fn: () => Biz.open(b.id) });
+      sc.interact.push({ x: cx, z: zf + dir * 2, r: 2.2, get label() { return b.n; }, get sub() { if (Biz.mine(b.id)) return 'Tu negocio · ' + fmt(Biz.rate(b)) + '/h · caja ' + fmt(Math.floor((Biz.tick(), Biz.st()[b.id].bank))); const o = Biz.owner(b.id); return o ? 'Propietario: ' + o.n : b.first || !Biz.online() ? 'En venta · ' + fmt(b.p) : 'Sin dueño · se consigue en la subasta diaria'; }, fn: () => Biz.open(b.id) });
     };
     shop('kiosk', -27, -10, 78, -1, 5.2, '#4a3a5a'); shop('cafe', -8, 8, 78, -1, 6, '#5a4a3a'); shop('phones', 10, 27, 78, -1, 7, '#2a3a5a');
-    shop('club', -27, -10, 102, 1, 8, '#1e1428'); shop('bowling', -8, 8, 102, 1, 6.6, '#2a2050'); shop('gym', 10, 27, 102, 1, 6, '#3a2a24');
+    shop('club', -27, -10, 102, 1, 8, '#1e1428');
+    { // la discoteca se puede visitar por dentro: hueco de puerta en la fachada
+      const i = C.findIndex(c => c.x0 === -27 && c.x1 === -10 && c.z0 === 91); if (i >= 0) C.splice(i, 1);
+      box(-27, 91, -19.7, 102, 8); box(-17.3, 91, -10, 102, 8); box(-19.7, 91, -17.3, 101.6, 8);
+      G.box(-19.75, 0, 101.9, -17.25, 3, 102.08, '#ff3d9a', { lit: false, faces: 's' }); k.sign('ENTRADA', '#ff3d9a', 2.2, [-18.5, 3.4, 102.12], 0);
+    } shop('bowling', -8, 8, 102, 1, 6.6, '#2a2050'); shop('gym', 10, 27, 102, 1, 6, '#3a2a24');
     // lavado (oeste) con su explanada
     shop('wash', -60, -43, 86, -1, 5.4, '#24384a'); G.floor(-60, 78, -43, 86, .022, '#6a6478', true); for (let x = -58; x < -44; x += 3) G.floor(x, 79, x + .15, 85, .025, '#f2f2f2', false);
     addCarGeo(G, -55, 82, Math.PI / 2, '#c0392b', false); addCarGeo(G, -49, 82, Math.PI / 2, '#2c3e50', false); box(-56.2, 80.9, -53.8, 83.1, 1.5); box(-50.2, 80.9, -47.8, 83.1, 1.5);
@@ -6783,6 +6880,670 @@ Games.lifeguard = {
   unmount() { this.S.alive = false; cancelAnimationFrame(this.S.raf); this.S.off(); },
 };
 
+/* ---- 24_casino3.js ---- */
+/* =====================================================================
+   CASINO III — pantallas en directo en cada máquina, Rasca y Gana y
+   la Planta -1 «Sala Neón» (gran sala de juego con 3-4 unidades de cada máquina).
+   ===================================================================== */
+
+/* ---------- En directo: lo que juega cada uno se ve en la pantalla de su máquina ---------- */
+const Live = {
+  map: new Map(), cur: null, lastSend: 0, tm: 0, tex: new Map(),
+  /** redibuja ya la pantalla de esa máquina (sin esperar a su turno de animación) */
+  refresh(k) { const a = this.tex.get(k); if (!a) return; a.draw(a.g, a.cv.width, a.cv.height, performance.now() / 1000); a.tex.needsUpdate = true; },
+  key() { return UI.panelMachine || (UI.machineLocal || null); },
+  start(k, g) { this.cur = { g, bet: 0, win: 0, sw: 0, sb: 0, wt: 0 }; this.k = k; this.push(true); },
+  stop() { if (this.k) { this.map.delete(this.k); this.refresh(this.k); if (Net.mode === 'online' && UI.panelMachine) Net.transport.send({ t: 'live', k: this.k, d: null }); } this.cur = null; this.k = null; },
+  set(det) { if (!this.cur) return; Object.assign(this.cur, det); this.push(); },
+  push(now) {
+    if (!this.cur || !this.k) return;
+    this.map.set(this.k, { g: this.cur.g, n: Settings.name, d: this.cur, at: performance.now() }); this.refresh(this.k);
+    clearTimeout(this.tm); const wait = now ? 0 : Math.max(0, 260 - (performance.now() - this.lastSend));
+    this.tm = setTimeout(() => { this.lastSend = performance.now(); if (Net.mode === 'online' && UI.panelMachine) Net.transport.send({ t: 'live', k: this.k, g: this.cur && this.cur.g, d: this.cur }); }, wait);
+  },
+};
+Bus.on('wallet', tx => {
+  const c = Live.cur; if (!c || tx.game !== c.g) return;
+  if (tx.type === 'bet') { c.bet = -tx.c; c.sb += -tx.c; c.win = 0; }
+  else if (tx.type === 'win') { c.win = tx.c; c.sw += tx.c; c.wt = Date.now(); }
+  Live.push();
+});
+/** Dibuja la partida de otro jugador en la pantalla de la máquina */
+function drawLive(g, w, h, t, L) {
+  const d = L.d || {}, big = d.win && Date.now() - d.wt < 2500;
+  g.fillStyle = '#07040f'; g.fillRect(0, 0, w, h);
+  g.fillStyle = big ? 'rgba(255,207,90,.25)' : 'rgba(255,61,154,.12)'; g.fillRect(0, 0, w, h * .2);
+  g.fillStyle = Math.sin(t * 6) > 0 ? '#ff3d5a' : '#7a1020'; g.beginPath(); g.arc(w * .07, h * .1, h * .035, 0, TAU); g.fill();
+  g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.font = `bold ${Math.round(h * .085)}px ${FONT_U}`; g.fillText('EN VIVO · ' + String(L.n || '').slice(0, 12), w * .13, h * .1);
+  const B = { x: w * .06, y: h * .23, w: w * .88, h: h * .58 };
+  if (L.g === 'mines' && d.grid) {
+    const s = Math.min(B.w, B.h) / 5.3, ox = w / 2 - s * 2.5, oy = B.y + (B.h - s * 5) / 2;
+    for (let i = 0; i < 25; i++) { const c = d.grid[i], x = ox + (i % 5) * s, y = oy + Math.floor(i / 5) * s; g.fillStyle = c === 'g' ? '#1f8a5a' : c === 'm' ? '#a01828' : '#2a2440'; g.fillRect(x + 1.5, y + 1.5, s - 3, s - 3); if (c === 'g') { g.fillStyle = '#9dffc4'; g.beginPath(); g.moveTo(x + s / 2, y + s * .2); g.lineTo(x + s * .8, y + s / 2); g.lineTo(x + s / 2, y + s * .8); g.lineTo(x + s * .2, y + s / 2); g.fill(); } if (c === 'm') { g.fillStyle = '#ffcf5a'; g.beginPath(); g.arc(x + s / 2, y + s / 2, s * .25, 0, TAU); g.fill(); } }
+  } else if ((L.g === 'fruit' || L.g === 'slots') && d.grid) {
+    const cols = d.grid.length, rows = d.grid[0].length, s = Math.min(B.w / cols, B.h / rows), ox = w / 2 - s * cols / 2, oy = B.y + (B.h - s * rows) / 2;
+    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) { g.fillStyle = r % 2 ? '#1a1430' : '#221a3c'; g.fillRect(ox + c * s + 1, oy + r * s + 1, s - 2, s - 2); try { g.drawImage(Sym.get(d.grid[c][r], 64), ox + c * s + s * .1, oy + r * s + s * .1, s * .8, s * .8); } catch (e) { } }
+  } else if (d.cards || d.dl) {
+    g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = `bold ${Math.round(h * .1)}px ${FONT_U}`;
+    if (d.dl) { g.fillStyle = '#9a8fb8'; g.fillText('Banca: ' + d.dl, w / 2, B.y + B.h * .2); g.fillStyle = '#fff'; g.fillText(d.hd || '', w / 2, B.y + B.h * .55); }
+    else { g.fillText(d.cards, w / 2, B.y + B.h * .35); g.fillStyle = '#ffcf5a'; g.font = `${Math.round(h * .08)}px ${FONT_D}`; g.fillText(d.res || '', w / 2, B.y + B.h * .7); }
+  } else {
+    neonText(g, (Games[L.g] && Games[L.g].title) || 'JUGANDO', w / 2, B.y + B.h * .35, h * .11, '#fff', '#3ff2ff');
+    if (d.bet) neonText(g, 'APUESTA ' + fmt(d.bet), w / 2, B.y + B.h * .7, h * .08, '#ffe08a', '#ff9f1c');
+  }
+  g.textAlign = 'center'; g.font = `bold ${Math.round(h * .085)}px ${FONT_U}`;
+  if (big) neonText(g, '+' + fmt(d.win), w / 2, h * .9, h * .12, '#fff', '#3df58a');
+  else { g.fillStyle = '#c8bfe8'; g.fillText('Sesión: ' + fmt(d.sw || 0) + ' ganado', w / 2, h * .9); }
+}
+/** Hace que la pantalla de una máquina muestre la partida en directo cuando alguien juega en ella */
+function liveTex(sc, tex, ix, iz) {
+  const a = (sc.anims || []).find(x => x.tex === tex); if (!a) return; const d0 = a.draw;
+  setTimeout(() => Live.tex.set(sc.id + ':' + Math.round(ix) + ':' + Math.round(iz), a), 0);
+  a.draw = (g, w, h, t) => { const L = Live.map.get(sc.id + ':' + Math.round(ix) + ':' + Math.round(iz)); if (L && L.d) drawLive(g, w, h, t, L); else d0(g, w, h, t); };
+}
+/* Al abrir una máquina empieza la retransmisión; al cerrarla se apaga */
+{
+  const _open = UI.open, _close = UI.close;
+  UI.open = function (id, o) { const mk = this.machine; const r = _open.call(this, id, o); if (mk && this.panelId === id && !SHARED_GAMES.has(id)) Live.start(mk, id); return r; };
+  UI.close = function (f) { const had = !!this.panelGame; const r = _close.call(this, f); if (had && !this.panelGame) Live.stop(); return r; };
+}
+
+/* ---------- Rasca y Gana ---------- */
+const SCRATCH = [
+  { id: 'neon', n: 'Rasca Neón', p: 100, col: '#3ff2ff', prizes: [[100, .14], [200, .07], [500, .03], [1000, .012], [5000, .0015], [20000, .0002]] },
+  { id: 'oro', n: 'Rasca Oro', p: 500, col: '#ffcf5a', prizes: [[500, .15], [1000, .07], [2500, .03], [5000, .012], [25000, .0015], [100000, .00025]] },
+  { id: 'diamante', n: 'Rasca Diamante', p: 2000, col: '#ff3d9a', prizes: [[2000, .15], [4000, .07], [10000, .03], [20000, .013], [100000, .0016], [500000, .0002]] },
+];
+// retorno medio ≈ 70 % (como la lotería real): se pierde más de lo que se gana
+const scratchRTP = c => c.prizes.reduce((a, [v, p]) => a + v * p, 0) / c.p;
+Games.scratch = {
+  title: 'RASCA Y GANA', sub: 'Tres cantidades iguales = premio', theme: 't-jetx',
+  rules: () => `<h3>Rasca y Gana</h3><ul><li>Compra un boleto y rasca con el ratón o el dedo las 9 casillas.</li><li>Si salen <b>tres cantidades iguales</b>, ganas esa cantidad.</li>
+    <li>Boletos: ${SCRATCH.map(c => `<b>${c.n}</b> ${fmt(c.p)} (premio máximo ${fmt(c.prizes[c.prizes.length - 1][0])})`).join(' · ')}.</li><li>Los premios están equilibrados: de media se recupera alrededor del ${Math.round(scratchRTP(SCRATCH[0]) * 100)} % de lo jugado.</li></ul>`,
+  mount(body) {
+    const { stage, side } = split2(body); const S = this.S = { alive: true, card: null, sel: 0, done: true };
+    const wrap = el('div', { style: 'position:relative;margin:auto;width:min(92%,460px);aspect-ratio:1.25;border-radius:18px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.5)' });
+    const base = el('canvas', { style: 'position:absolute;inset:0;width:100%;height:100%' }), top = el('canvas', { style: 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair' });
+    wrap.append(base, top); stage.append(el('div', { style: 'display:grid;place-items:center;width:100%;height:100%' }, wrap));
+    const W = 500, H = 400; base.width = top.width = W; base.height = top.height = H; const bg = base.getContext('2d'), tg = top.getContext('2d');
+    const segEl = el('div', { class: 'seg' }); SCRATCH.forEach((c, i) => segEl.append(el('button', { class: i === 0 ? 'on' : '', text: c.n + ' · ' + fmt(c.p), onclick: e => { if (!S.done) return; S.sel = i; $$('button', segEl).forEach(b => b.classList.remove('on')); e.target.classList.add('on'); idle(); } })));
+    const buy = el('button', { class: 'btn primary wide', text: 'Comprar boleto', onclick: () => newCard() });
+    const all = el('button', { class: 'btn wide', text: 'Rascar todo', disabled: true, onclick: () => { tg.clearRect(0, 0, W, H); check(true); } });
+    const sLast = statBox('Último premio', '—'), sCnt = statBox('Boletos hoy', String(Store.get('sc_n', 0)));
+    side.append(el('span', { class: 'lbl', text: 'Boleto' }), segEl, buy, all, sLast.el, sCnt.el, el('p', { class: 'note', text: 'Tres cantidades iguales = premio. Se rasca arrastrando sobre las casillas.' }));
+    function cover(c) { const gr = tg.createLinearGradient(0, 0, W, H); gr.addColorStop(0, '#b8bcc8'); gr.addColorStop(.5, '#e8ecf4'); gr.addColorStop(1, '#9aa0ae'); tg.globalCompositeOperation = 'source-over'; tg.fillStyle = gr; tg.fillRect(0, 0, W, H); tg.fillStyle = 'rgba(0,0,0,.18)'; for (let i = 0; i < 9; i++) { const x = 40 + (i % 3) * 145, y = 95 + Math.floor(i / 3) * 95; tg.fillText && (tg.font = `bold 28px ${FONT_U}`, tg.textAlign = 'center', tg.fillText('?', x + 62, y + 46)); } neonText(tg, c.n.toUpperCase(), W / 2, 44, 34, '#fff', c.col); }
+    function paintBase(c, cells) {
+      const gr = bg.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#1a0f2e'); gr.addColorStop(1, '#2a1650'); bg.fillStyle = gr; bg.fillRect(0, 0, W, H);
+      neonText(bg, c.n.toUpperCase(), W / 2, 44, 34, '#fff', c.col);
+      cells && cells.forEach((v, i) => { const x = 40 + (i % 3) * 145, y = 95 + Math.floor(i / 3) * 95; bg.fillStyle = 'rgba(255,255,255,.07)'; bg.fillRect(x, y, 125, 82); bg.fillStyle = S.card && S.card.hit && S.card.hit.includes(i) ? '#ffcf5a' : '#fff'; bg.font = `bold ${v >= 100000 ? 26 : 30}px ${FONT_U}`; bg.textAlign = 'center'; bg.textBaseline = 'middle'; bg.fillText(fmt(v), x + 62, y + 42); });
+    }
+    function idle() { const c = SCRATCH[S.sel]; paintBase(c, null); cover(c); neonText(tg, 'COMPRA UN BOLETO', W / 2, H / 2 + 20, 30, '#2a1650', c.col); }
+    function newCard() {
+      if (!S.done) return; const c = SCRATCH[S.sel]; if (!Wallet.bet(c.p, 'scratch')) return;
+      Store.set('sc_n', Store.get('sc_n', 0) + 1); sCnt.set(String(Store.get('sc_n', 0)));
+      let r = RNG.float(), prize = 0; for (const [v, p] of c.prizes) { if (r < p) { prize = v; break; } r -= p; }
+      const vals = c.prizes.map(x => x[0]), cells = [];
+      if (prize) { cells.push(prize, prize, prize); }
+      const cnt = new Map(prize ? [[prize, 3]] : []);
+      while (cells.length < 9) { const v = vals[Math.floor(RNG.float() * vals.length)]; if ((cnt.get(v) || 0) >= 2 && v !== prize) continue; if (v === prize) continue; cnt.set(v, (cnt.get(v) || 0) + 1); cells.push(v); }
+      RNG.shuffle(cells); S.card = { c, cells, prize, hit: prize ? cells.map((v, i) => v === prize ? i : -1).filter(i => i >= 0) : [] }; S.done = false;
+      paintBase(c, cells); cover(c); all.disabled = false; buy.disabled = true; Sfx.play('chip'); Live.set({ bet: c.p });
+    }
+    let scr = false, acc = 0;
+    const pos = e => { const r = top.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+    top.addEventListener('pointerdown', e => { if (S.done) return; scr = true; top.setPointerCapture(e.pointerId); rub(e); });
+    top.addEventListener('pointermove', e => { if (scr) rub(e); });
+    top.addEventListener('pointerup', () => { scr = false; check(); });
+    function rub(e) { const [x, y] = pos(e); tg.globalCompositeOperation = 'destination-out'; tg.beginPath(); tg.arc(x, y, 26, 0, TAU); tg.fill(); tg.globalCompositeOperation = 'source-over'; if ((acc = (acc + 1) % 6) === 0) { Sfx.play('tick', 1.4 + Math.random() * .3); FX.burst({ x: e.clientX, y: e.clientY }, 3, ['#d8dce8', '#ffffff']); } }
+    function check(force) {
+      if (S.done) return;
+      if (!force) { const d = tg.getImageData(0, 0, W, H).data; let n = 0, o = 0; for (let i = 3; i < d.length; i += 160) { n++; if (d[i] < 40) o++; } if (o / n < .62) return; tg.clearRect(0, 0, W, H); }
+      S.done = true; all.disabled = true; buy.disabled = false; const k = S.card;
+      if (k.prize) { paintBase(k.c, k.cells); Wallet.pay(k.prize, 'scratch'); sLast.set(fmt(k.prize), true); UI.celebrate(k.prize, k.c.p, wrap, k.prize >= k.c.p * 50 ? '¡RASCA PREMIADO!' : undefined); }
+      else { sLast.set('—'); Sfx.play('lose'); FX.float(wrap, 'Sin premio', '#ff9fb0', 30); }
+    }
+    idle();
+  },
+  canClose() { if (!this.S.done) { UI.toast('Rasca tu boleto antes de salir (o pulsa «Rascar todo»)', 'bad'); Sfx.play('error'); return false; } return true; },
+  unmount() { this.S.alive = false; },
+};
+
+/* ---------- Planta -1: SALA NEÓN ---------- */
+function buildSotano() {
+  return buildFloor({
+    id: 'sotano', label: 'SALA NEÓN · PLANTA -1', music: 'casino', oz: -2000, hx: 34, hz: 24, fog: [0x0a0618, 34, 95], amb: [[.28, .18, .4], [.16, .1, .22], [.05, .03, .08]],
+    carpet: { base: '#2a0f3e', line: 'rgba(255,61,154,.45)', dot: 'rgba(63,242,255,.45)' },
+    wall: { base: '#1e0d34', top: '#0e0620', dado: '#12081f', gold: '#ff3d9a', neon: '#3ff2ff' },
+    lights: lt => {
+      for (const x of [-26, -13, 0, 13, 26]) for (const z of [-16, 0, 16]) lt(x, 4.4, z, x % 26 === 0 ? '#ff3d9a' : '#ffd8a0', 13, 1.05);
+      lt(0, 3, 21, '#5cb8ff', 12, 1.4); lt(-31, 2, 0, '#ff9f1c', 10, 1.2); lt(31, 2, 0, '#3df58a', 10, 1.2); lt(0, 3, -21, '#c04aff', 12, 1.3); lt(0, 3, -16, '#ffcf5a', 7, 1.3);
+    },
+  }, k => {
+    const { sc, G, gl1, gl3, gl8, OX, OZ } = k;
+    sc.spawn = { x: OX + 15.9, z: OZ - 9.4, yaw: 0, ry: 0 };
+    // tragaperras clásicas: pared oeste (8) y isla central oeste (6 + 6 video slots)
+    for (let i = 0; i < 8; i++) { const z = -19 + i * 5.2, m = FRUIT_MACHINES[i % FRUIT_MACHINES.length], mi = i % FRUIT_MACHINES.length;
+      const tex = makeAnimTex(sc, 256, 192, (g, w, h, t) => drawReelAttract(g, w, h, t + i * 1.1, ['cherry', 'lemon', 'bell', 'seven', 'bar', 'diamond', 'grape', 'orange'], 3, m.color), .16);
+      k.machine(-33.25, z, Math.PI / 2, '#5a1a0a', m.color, m.name, tex, 'Tragaperras ' + m.name, m.sub, () => UI.open('fruit', { machine: mi })); }
+    for (let i = 0; i < 6; i++) { const z = -14 + i * 5.2, th = SLOT_THEMES[i % SLOT_THEMES.length], ti = i % SLOT_THEMES.length;
+      const t1 = makeAnimTex(sc, 256, 192, (g, w, h, t) => drawReelAttract(g, w, h, t + i, th.attract, 5, th.acc), .16);
+      k.machine(-24.8, z, -Math.PI / 2, th.body, th.acc, th.name.toUpperCase(), t1, 'Slots: ' + th.name, th.sub, () => UI.open('slots', { theme: ti }));
+      const m = FRUIT_MACHINES[(i + 1) % FRUIT_MACHINES.length], mi = (i + 1) % FRUIT_MACHINES.length;
+      const t2 = makeAnimTex(sc, 256, 192, (g, w, h, t) => drawReelAttract(g, w, h, t + i * .7, ['seven', 'bell', 'cherry', 'bar', 'diamond'], 3, m.color), .16);
+      k.machine(-23.4, z, Math.PI / 2, '#3a0a2a', m.color, m.name, t2, 'Tragaperras ' + m.name, m.sub, () => UI.open('fruit', { machine: mi })); }
+    // video slots y video póker: pared este (8) e isla central este (6 + 6)
+    for (let i = 0; i < 8; i++) { const z = -19 + i * 5.2, th = SLOT_THEMES[i % SLOT_THEMES.length], ti = i % SLOT_THEMES.length;
+      const tex = makeAnimTex(sc, 256, 192, (g, w, h, t) => drawReelAttract(g, w, h, t + i * .9, th.attract, 5, th.acc), .16);
+      k.machine(33.25, z, -Math.PI / 2, th.body, th.acc, th.name.toUpperCase(), tex, 'Slots: ' + th.name, th.sub, () => UI.open('slots', { theme: ti })); }
+    for (let i = 0; i < 6; i++) { const z = -14 + i * 5.2;
+      const tv = makeAnimTex(sc, 256, 192, (g, w, h, t) => { g.fillStyle = '#081830'; g.fillRect(0, 0, w, h); neonText(g, 'VIDEO PÓKER', w / 2, 40, 26, '#fff', '#3ff2ff'); const cs = ['A♠', 'K♥', 'Q♦', 'J♣', '10♠']; cs.forEach((c, j) => { const x = 22 + j * 44, y = 80 + Math.sin(t * 2 + j) * 4; g.fillStyle = '#fff'; g.fillRect(x, y, 38, 56); g.fillStyle = /♥|♦/.test(c) ? '#c8102e' : '#111'; g.font = `bold 18px ${FONT_U}`; g.textAlign = 'center'; g.fillText(c, x + 19, y + 30); }); }, .3);
+      k.machine(24.8, z, Math.PI / 2, '#0a2a4a', '#3ff2ff', 'VIDEO PÓKER', tv, 'Video Póker', 'Jacks or Better · hasta ×800', () => UI.open('vpoker'));
+      const th = SLOT_THEMES[(i + 1) % SLOT_THEMES.length], ti = (i + 1) % SLOT_THEMES.length;
+      const t2 = makeAnimTex(sc, 256, 192, (g, w, h, t) => drawReelAttract(g, w, h, t + i * 1.3, th.attract, 5, th.acc), .16);
+      k.machine(23.4, z, -Math.PI / 2, th.body, th.acc, th.name.toUpperCase(), t2, 'Slots: ' + th.name, th.sub, () => UI.open('slots', { theme: ti })); }
+    // Plinko ×3 y Mines ×3 en la pared norte
+    const cab = (lx, accent, name, draw, label, sub, fn) => {
+      const lz = -23.2;
+      G.box(lx - 1.25, 0, lz - .6, lx + 1.25, .6, lz + .6, '#15121c'); G.box(lx - 1.2, .6, lz - .6, lx + 1.2, 3.6, lz + .2, '#1c1630'); G.box(lx - 1.35, 3.6, lz - .6, lx + 1.35, 4.2, lz + .3, '#120c1c');
+      G.rect('s', lz + .2, lx - 1.2, lx - 1.12, .6, 3.6, accent, false, .01); G.rect('s', lz + .2, lx + 1.12, lx + 1.2, .6, 3.6, accent, false, .01); G.box(lx - 1, .6, lz + .2, lx + 1, .95, lz + .65, '#26203a', { top: '#322a4a' });
+      const tex = makeAnimTex(sc, 256, 320, draw, .1); const p = plane(2, 2.5, tex); p.position.set(OX + lx, 2.15, OZ + lz + .21); sc.group.add(p);
+      const tt = ctex(256, 64, g => { g.fillStyle = '#08050f'; g.fillRect(0, 0, 256, 64); neonText(g, name, 128, 34, 34, '#fff', accent); }).tex; const tp = plane(2.6, .58, tt); tp.position.set(OX + lx, 3.9, OZ + lz + .32); sc.group.add(tp);
+      gl8.add(OX + lx, 2.2, OZ + lz + 1, accent, .3); gl3.add(OX + lx, 3.9, OZ + lz + .4, accent, .4);
+      sc.colliders.push({ x0: OX + lx - 1.35, x1: OX + lx + 1.35, z0: OZ + lz - .6, z1: OZ + lz + .65 });
+      sc.interact.push({ x: OX + lx, z: OZ + lz + 1.7, r: 1.9, label, sub, fn }); liveTex(sc, tex, OX + lx, OZ + lz + 1.7);
+    };
+    for (const x of [-12, -8.4, -4.8]) cab(x, '#3ff2ff', 'PLINKO', drawPlinkoAttract, 'Jugar a Plinko', 'Suelta la bola y reza', () => UI.open('plinko'));
+    for (const x of [1.2, 4.8, 8.4]) cab(x, '#3df58a', 'MINES', drawMinesAttract, 'Jugar a Mines', 'Encuentra gemas, evita minas', () => UI.open('mines'));
+    // mesas: 2 ruletas compartidas, 3 de blackjack y la Rueda Royale
+    k.roulette(-10, -1.5, 'Ruleta (mesa compartida)', 'Gira sola cada 15 s para todos', () => UI.open('roulette'));
+    k.roulette(10, -1.5, 'Ruleta (mesa compartida)', 'Gira sola cada 15 s para todos', () => UI.open('roulette'));
+    for (const x of [-11, 0, 11]) k.bj(x, 7.5, 'Sentarse al Blackjack', 'Gana a la banca sin pasarte de 21', () => UI.open('blackjack'));
+    // rasca y gana: mostrador junto a la entrada
+    G.box(-4, 0, -15, 4, 1.1, -13.8, '#2a1440', { top: '#ffcf5a' }); G.box(-4, 2.8, -15, 4, 3.3, -13.8, '#ff3d9a'); sc.colliders.push({ x0: OX - 4, x1: OX + 4, z0: OZ - 15, z1: OZ - 13.8 });
+    for (let i = 0; i < 9; i++) G.box(-3.6 + i * .8, 1.1, -14.8, -3.1 + i * .8, 1.14, -14.2, ['#3ff2ff', '#ffcf5a', '#ff3d9a'][i % 3], { lit: false });
+    k.sign('RASCA Y GANA', '#ffcf5a', 5.4, [0, 3.95, -13.75], 0); gl8.add(OX, 2.2, OZ - 13, '#ffcf5a', .4);
+    k.npc(0, -15.6, 0, k.staff({ shirt: '#ff3d9a', sleeve: '#ff3d9a', stripe: '#ffcf5a' }));
+    sc.interact.push({ x: OX, z: OZ - 12.4, r: 2.2, label: 'Rasca y Gana', sub: 'Boletos de 1 €, 5 € y 20 € · premios de hasta 5.000 €', fn: () => UI.open('scratch') });
+    // JetX: gran pantalla en la pared sur con gradas
+    k.screen(16, 6.5, [0, 3.6, 23.5], Math.PI, (g, w, h, t) => { drawJetxMini(g, w, h, t); if (Net.mode === 'online' && JXN.ph === 'fly') neonText(g, fmtX(jetM((performance.now() - JXN.t0) / 1000)), w / 2, h * .2, h * .16, '#fff', '#ff3d9a'); }, .12);
+    for (let i = 0; i < 5; i++) { const x = -10 + i * 5; G.box(x - 1.6, 0, 17.6, x + 1.6, .5, 18.6, '#1a1030', { top: '#3a2a5a' }); sc.colliders.push({ x0: OX + x - 1.6, x1: OX + x + 1.6, z0: OZ + 17.6, z1: OZ + 18.6 }); sc.interact.push({ x: OX + x, z: OZ + 16.6, r: 1.9, label: 'Jugar a JetX', sub: 'Ronda compartida con todos los jugadores', fn: () => UI.open('jetx') }); }
+    k.sign('JETX ARENA', '#ff3d9a', 5, [0, 7.4, 23.3], Math.PI);
+    // bar, carteles, jackpot y ambiente
+    k.bar && k.bar(26, 19.5, '#3df58a');
+    k.screen(7, 2.2, [0, 4, -23.85], 0, (g, w, h, t) => { g.fillStyle = '#120400'; g.fillRect(0, 0, w, h); neonText(g, 'JACKPOT PROGRESIVO', w / 2, h * .28, h * .2, '#ffe08a', '#ff9f1c'); neonText(g, fmt(Jackpot.cents), w / 2, h * .7, h * .32, '#fff', Math.sin(t * 4) > 0 ? '#ff3d9a' : '#ffcf5a'); }, .2);
+    k.sign('SALA NEÓN', '#3ff2ff', 7, [-20, 4.2, -23.85], 0); k.sign('PLANTA -1', '#ff3d9a', 5, [20, 4.2, -23.85], 0);
+    for (let x = -32; x <= 32; x += 4) { gl3.add(OX + x, 4.6, OZ - 23.6, ['#ff3d9a', '#3ff2ff', '#ffcf5a'][Math.abs(x / 4) % 3], .5); gl3.add(OX + x, 4.6, OZ + 23.6, ['#3ff2ff', '#ff3d9a', '#3df58a'][Math.abs(x / 4) % 3], .5); }
+    for (const [x, z] of [[-17, -19], [17, -19], [-17, 19], [17, 19]]) k.plant(x, z);
+    k.npc(-10, -4.2, 0, k.staff({ shirt: '#f4f4f4', stripe: '#ff3d9a' })); k.npc(10, -4.2, 0, k.staff({ shirt: '#f4f4f4', stripe: '#3ff2ff' }));
+    for (const x of [-11, 0, 11]) k.npc(x, 5.4, 0, k.staff({ shirt: '#1a1a22', stripe: '#ffcf5a' }));
+    k.walker([[-19, -20], [-19, 20], [19, 20], [19, -20]]); k.walker([[19, 20], [-19, 20], [-19, -20]]); k.walker([[-28, -21], [-28, 21]]); k.walker([[28, 21], [28, -21]]);
+    k.walker([[-6, 12], [6, 12], [6, -6], [-6, -6]]);
+    k.vertical('sotano');
+  });
+}
+
+/* ---- 25_social.js ---- */
+/* =====================================================================
+   COMUNIDAD — chat general y privados, contactos, comandos, News,
+   Suggestions (foro con votos) y el evento del OVNI.
+   ===================================================================== */
+const NEWS = [
+  ['Planta -1 «Sala Neón»', 'Más de 30 tragaperras, 3 Plinko, 3 Mines, 6 vídeo póker, 2 ruletas, 3 mesas de blackjack, JetX Arena y Rasca y Gana. Baja en ascensor o por las escaleras del casino.'],
+  ['Máquinas en directo', 'La pantalla de cada máquina enseña la partida de quien la está usando: las gemas y minas de Mines, los rodillos, las cartas…'],
+  ['Ruleta cada 15 segundos', 'La ruleta gira sola para todos. Se ven las fichas de los demás (en azul) y la lista de ganadores.'],
+  ['Negocios con dueño único y subastas', 'El Kiosco y la Cafetería son del primero que los compre. El resto sale a subasta, uno cada día. Los negocios tienen ingresos, gastos y beneficio.'],
+  ['Elecciones semanales y gobierno', 'Voto secreto. El alcalde decide el impuesto sobre los premios del casino, el extra de premios, las ayudas y su propio sueldo.'],
+  ['Chat y contactos', 'Pulsa T para escribir. /w NOMBRE para mensajes privados. Añade contactos desde la app Contactos del móvil.'],
+  ['Trabajos y maestría', 'Repartidor, taxista y socorrista. Cada nivel de maestría paga un 12 % más.'],
+];
+
+/* ---------------- Chat ---------------- */
+const Chat = {
+  log: [], open: false,
+  init() {
+    const box = el('div', { id: 'chat' }), list = el('div', { class: 'ch-list' }), inp = el('input', { class: 'ch-in', maxlength: '200', placeholder: 'Escribe… (/help para comandos)', hidden: true });
+    box.append(list, inp); document.body.append(box); this.box = box; this.list = list; this.inp = inp;
+    inp.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { const t = inp.value.trim(); if (t) this.send(t); inp.value = ''; this.toggle(false); }
+      else if (e.key === 'Escape') this.toggle(false);
+    });
+    inp.addEventListener('keyup', e => e.stopPropagation());
+    addEventListener('keydown', e => {
+      if (this.open || e.repeat) return; const tag = (e.target && e.target.tagName) || ''; if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
+      if (!$('#modal').hidden || UI.panelGame || $('#hud').hidden) return;
+      if (e.code === 'KeyT' || e.key === '/') { e.preventDefault(); this.toggle(true, e.key === '/' ? '/' : ''); }
+    });
+    const b = el('button', { class: 'ib', 'aria-label': 'Chat (T)', html: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>', onclick: () => this.toggle(!this.open) });
+    $('.hud-btns').prepend(b);
+    this.sys('Pulsa T para chatear. /help para ver los comandos.');
+  },
+  toggle(on, pre = '') {
+    this.open = on; this.inp.hidden = !on; this.box.classList.toggle('on', on);
+    if (on) { if (Net.mode !== 'online') this.sys('El chat funciona cuando juegas desde la dirección del servidor.'); this.inp.value = pre; setTimeout(() => this.inp.focus(), 0); World.setInputBlocked(true); }
+    else { this.inp.blur(); World.setInputBlocked(!!UI.panelGame || !$('#modal').hidden); }
+    this.draw();
+  },
+  send(t) { if (Net.mode !== 'online') { this.sys('Sin conexión con el servidor.'); return; } Net.transport.send({ t: 'chat', txt: t }); },
+  whisper(name) { this.toggle(true, '/w ' + name + ' '); },
+  add(m) { this.log.push(Object.assign({ at: Date.now() }, m)); this.log = this.log.slice(-60); this.draw(); if (m.priv && m.pid !== Net.id) { Sfx.play('ding'); Phone.notify && Phone.notify(); } },
+  sys(txt) { this.add({ sys: true, txt }); },
+  draw() {
+    const now = Date.now(), L = this.open ? this.log.slice(-14) : this.log.filter(m => now - m.at < 15000).slice(-6);
+    this.list.innerHTML = ''; for (const m of L) {
+      const row = el('div', { class: 'ch-m' + (m.sys ? ' sys' : '') + (m.priv ? ' priv' : '') });
+      if (m.sys) row.textContent = m.txt;
+      else { const who = el('b', { text: m.priv ? (m.pid === Net.id ? '→ ' + m.tn : m.n + ' (privado)') : m.n }); who.onclick = () => m.pid !== Net.id && this.whisper(m.n); row.append(who, document.createTextNode(': ' + m.txt)); }
+      this.list.append(row);
+    }
+  },
+};
+setInterval(() => Chat.list && !Chat.open && Chat.draw(), 2000);
+
+/* ---------------- Contactos ---------------- */
+const Contacts = {
+  st() { const s = Prog.s; if (!s.contacts) s.contacts = {}; return s.contacts; },
+  online() { const L = []; for (const [id, p] of Net.peers) if (p.name) L.push({ id, n: p.name }); return L; },
+  modal() {
+    const draw = c => {
+      const on = this.online(), mine = this.st(), onIds = new Set(on.map(p => p.id));
+      c.innerHTML = `<h2>Contactos</h2>` + (Net.mode !== 'online' ? '<p class="note">Conéctate al servidor para ver quién está jugando.</p>' : '') +
+        `<h3 style="margin:8px 0 4px">Mis contactos</h3>` + (Object.keys(mine).length ? Object.entries(mine).map(([id, n]) => `<div class="hm-row"><span><i class="dot ${onIds.has(id) ? 'on' : ''}"></i> ${esc(n)} <small style="color:var(--muted)">${onIds.has(id) ? 'conectado' : 'desconectado'}</small></span><span><button class="btn sm primary" data-w="${esc(n)}" ${onIds.has(id) ? '' : 'disabled'}>Mensaje</button> <button class="btn sm" data-del="${id}">Quitar</button></span></div>`).join('') : '<p class="note">Aún no tienes contactos.</p>') +
+        `<h3 style="margin:12px 0 4px">Conectados ahora (${on.length})</h3>` + (on.length ? on.map(p => `<div class="hm-row"><span><i class="dot on"></i> ${esc(p.n)}</span><span>${mine[p.id] ? '<span class="tag ok">Contacto</span>' : `<button class="btn sm" data-add="${p.id}" data-n="${esc(p.n)}">Añadir</button>`} <button class="btn sm primary" data-w="${esc(p.n)}">Mensaje</button></span></div>`).join('') : '<p class="note">No hay nadie más conectado.</p>') +
+        `<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
+      c.querySelector('#mOk').onclick = () => UI.closeModal();
+      $$('[data-add]', c).forEach(b => b.onclick = () => { this.st()[b.dataset.add] = b.dataset.n; Prog.save(); Sfx.play('chip'); draw(c); });
+      $$('[data-del]', c).forEach(b => b.onclick = () => { delete this.st()[b.dataset.del]; Prog.save(); draw(c); });
+      $$('[data-w]', c).forEach(b => b.onclick = () => { UI.closeModal(); Chat.whisper(b.dataset.w); });
+    };
+    UI.modal('', draw); $('#modal').classList.add('right');
+  },
+};
+
+/* ---------------- News y Suggestions ---------------- */
+const Board = {
+  news: [], sug: [],
+  initButtons() {
+    const nb = el('button', { class: 'tb', text: 'News', onclick: () => this.newsModal() }), sb = el('button', { class: 'tb', text: 'Suggestions', onclick: () => this.sugModal() });
+    $('.hud-btns').prepend(nb, sb); this.nb = nb;
+  },
+  newsModal() {
+    this.nb.classList.remove('new'); Store.set('newsSeen', (this.news[0] || {}).at || 0);
+    UI.modal(`<h2>News</h2><h3 style="margin:4px 0">En la ciudad</h3>` + (this.news.length ? this.news.slice(0, 15).map(n => `<div class="hm-row"><span>${esc(n.txt)}</span><small style="color:var(--muted)">${new Date(n.at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<p class="note">' + (Net.mode === 'online' ? 'Aún no ha pasado nada hoy.' : 'Conéctate al servidor para ver lo que pasa en la ciudad.') + '</p>') +
+      `<h3 style="margin:14px 0 4px">Novedades del juego</h3>` + NEWS.map(([t, d]) => `<div class="hm-row" style="display:block"><b>${t}</b><br><small style="color:var(--muted)">${d}</small></div>`).join('') + `<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`, c => { c.querySelector('#mOk').onclick = () => UI.closeModal(); });
+    $('#modal').classList.add('right');
+  },
+  sugModal() {
+    const draw = c => {
+      const on = Net.mode === 'online';
+      c.innerHTML = `<h2>Suggestions</h2><p class="note" style="margin-top:0">Propón mejoras para el juego y vota las de los demás (un voto por propuesta).</p>` +
+        (on ? `<textarea id="sugIn" class="inp" maxlength="280" rows="3" placeholder="Tu sugerencia…"></textarea><div class="hm-act"><button class="btn primary" id="sugB">Publicar</button></div>` : '<p class="note">Conéctate al servidor para publicar y votar.</p>') +
+        `<div class="hm-list">${this.sug.length ? this.sug.map(s => `<div class="hm-row" style="align-items:flex-start"><span style="flex:1"><b>${esc(s.a)}</b> <small style="color:var(--muted)">${new Date(s.at).toLocaleDateString('es-ES')}</small><br>${esc(s.txt)}</span><button class="btn sm ${s.me ? '' : 'primary'}" data-v="${s.id}" ${s.me || !on ? 'disabled' : ''}>👍 ${s.v}</button></div>`).join('') : '<p class="note">Todavía no hay sugerencias.</p>'}</div><div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
+      c.querySelector('#mOk').onclick = () => UI.closeModal();
+      const ti = c.querySelector('#sugIn'); if (ti) { ti.addEventListener('keydown', e => e.stopPropagation()); c.querySelector('#sugB').onclick = () => { const t = ti.value.trim(); if (t.length < 5) { UI.toast('Escribe un poco más', 'bad'); return; } Net.transport.send({ t: 'sugpost', txt: t }); ti.value = ''; UI.toast('¡Sugerencia publicada!', 'good'); }; }
+      $$('[data-v]', c).forEach(b => b.onclick = () => { Net.transport.send({ t: 'sugvote', id: b.dataset.v }); b.disabled = true; Sfx.play('chip'); });
+    };
+    UI.modal('', c => { this.sugC = c; draw(c); }); this.sugDraw = draw; $('#modal').classList.add('right');
+  },
+};
+
+/* ---------------- Evento: OVNI ---------------- */
+const Ufo = {
+  on: false,
+  start(x, z, elapsed = 0) {
+    if (this.on || elapsed > 90000) return;
+    if (!World.scene || $('#hud').hidden) { setTimeout(() => this.start(x, z, elapsed + 2000), 2000); return; } // la ciudad aún se está cargando
+    this.on = true; const W = World.three.scene, t0 = performance.now() - elapsed;
+    const g = new THREE.Group(), mat = c => new THREE.MeshBasicMaterial({ color: c });
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 5.4, 1.1, 24), mat(0x8a90a8)); g.add(disc);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(5.6, 5.6, .35, 24), mat(0x3a3f55)); g.add(rim);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(2.4, 16, 10, 0, TAU, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7cfff0, transparent: true, opacity: .75 })); dome.position.y = .5; g.add(dome);
+    const lights = []; for (let i = 0; i < 12; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(.28, 8, 6), mat(0xffffff)); const a = i / 12 * TAU; m.position.set(Math.cos(a) * 5.3, -.1, Math.sin(a) * 5.3); g.add(m); lights.push(m); }
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 5, 1, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0x7cff9a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); g.add(beam);
+    g.position.set(x, 80, z); W.add(g);
+    const sc = World.areaAt(x, 0, z), aliens = [], items = [];
+    const hum = Sfx.engine ? Sfx.engine() : null;
+    UI.toast('🛸 ¡Un OVNI sobrevuela la ciudad! Busca a los alienígenas y salúdalos', 'good'); FX.flash('#7cff9a', .35); Sfx.play('whoosh');
+    if (!World.scene.ext || Math.hypot(World.player.x - x, World.player.z - z) > 20) World.setWaypoint({ x, z, label: 'OVNI' });
+    const claimed = new Set();
+    const spawnAliens = () => {
+      for (let i = 0; i < 5; i++) {
+        const h = makeHuman({ skin: '#7cff7a', hair: '#5ad85a', shirt: '#c8ccd8', sleeve: '#c8ccd8', pants: '#8a8ea0', shoes: '#2a2a33', hairStyle: 0 });
+        h.root.scale.set(.85, .85, .85); W.add(h.root); const a = { h, ph: i / 5 * TAU, r: 4 + (i % 2) * 2 };
+        aliens.push(a);
+        const it = { x: 0, z: 0, r: 1.8, label: 'Alienígena', get sub() { return claimed.has(i) ? 'Ya le has saludado' : 'Saludar · recompensa'; }, fn: () => { if (claimed.has(i)) return; claimed.add(i); World.emote && World.emote('wave'); Sfx.play('win'); FX.float(null, '👽 ¡Hola, terrícola!', '#7cff9a', 36); if (Net.mode === 'online') Net.transport.send({ t: 'ufoclaim', i }); else { const c = 1000 + Math.floor(Math.random() * 1500); Wallet.grant(c, 'Contacto alienígena'); UI.toast('👽 Los alienígenas te regalan ' + fmt(c), 'good'); } } };
+        a.it = it; items.push(it); sc.interact.push(it);
+      }
+    };
+    const tick = () => {
+      const t = (performance.now() - t0) / 1000;
+      let y; if (t < 12) y = lerp(80, 9, 1 - Math.pow(1 - t / 12, 3)); else if (t < 80) y = 9 + Math.sin(t * 1.3) * .4; else y = 9 + Math.pow(t - 80, 2) * .9;
+      g.position.y = y; g.rotation.y = t * .8; lights.forEach((m, i) => m.material.color.setHSL(((t * .5 + i / 12) % 1), 1, .6));
+      const bOn = t > 11 && t < 80 ? Math.min(1, (t - 11) / 1.5) * (t > 77 ? (80 - t) / 3 : 1) : 0; beam.material.opacity = .35 * bOn; beam.scale.set(1, y, 1); beam.position.y = -y / 2;
+      if (hum) hum.set(1 + Math.sin(t * 3) * .2);
+      if (t > 14 && !aliens.length) { spawnAliens(); Sfx.play('door'); }
+      for (const a of aliens) { const k = a.ph + t * .35, ax = x + Math.cos(k) * a.r, az = z + Math.sin(k) * a.r; a.h.root.position.set(ax, t > 78 ? -50 : 0, az); a.h.root.rotation.y = -k; a.h.animate(.016, .6, t); a.it.x = ax - sc.off.x; a.it.z = az - sc.off.z; }
+      if (t < 95) requestAnimationFrame(tick);
+      else { W.remove(g); for (const a of aliens) W.remove(a.h.root); sc.interact = sc.interact.filter(i => !items.includes(i)); hum && hum.stop(); this.on = false; UI.toast('🛸 El OVNI se ha marchado…', ''); }
+    };
+    requestAnimationFrame(tick);
+  },
+};
+// sin servidor también hay OVNI de vez en cuando
+setInterval(() => { if (Net.mode !== 'online' && !$('#hud').hidden && Math.random() < .03) Ufo.start(...[[0, 56], [0, 1], [-14, 116]][Math.floor(Math.random() * 3)]); }, 60000);
+
+/* Mensajes del servidor */
+{
+  const _r = Net.receive;
+  Net.receive = function (m) {
+    if (m && m.t === 'chat') { Chat.add(m); return; }
+    if (m && m.t === 'news') { Board.news = m.list || []; if (Board.nb && (Board.news[0] || {}).at > Store.get('newsSeen', 0)) Board.nb.classList.add('new'); return; }
+    if (m && m.t === 'sug') { Board.sug = m.list || []; if (Board.sugC && Board.sugC.isConnected && !Board.sugC.contains(document.activeElement)) Board.sugDraw(Board.sugC); return; }
+    if (m && m.t === 'ufo') { Ufo.start(m.x, m.z, m.at || 0); return; }
+    return _r.call(this, m);
+  };
+}
+
+/* ---- 26_extra.js ---- */
+/* =====================================================================
+   MÁS CIUDAD — Discoteca Pulse por dentro (pista, DJ, bailarines con ropa
+   de calle, barra) y DISTRITO NORTE detrás del casino: Neon Park (noria y
+   carrusel montables, tiro al blanco), circuito de karts y salón recreativo.
+   Minijuegos nuevos: Baile (ritmo), Tiro al blanco, Karts y Neon Snake.
+   ===================================================================== */
+const Extra = {
+  steps() {
+    World.defPlace('club', { off: [-18.5, 0, 96.5], zone: [-27, -10, 91, 102] });
+    return [['club', buildClub], ['norte', buildNorte]];
+  },
+};
+/* el dueño de un negocio cobra la mitad de lo que gastan los clientes dentro */
+function bizSpend(id, c) { if (Net.mode === 'online') Net.transport.send({ t: 'bizspend', id, c }); }
+
+/* ---------------- Atracciones montables (noria, carrusel) ---------------- */
+const Rides = {
+  on: null,
+  start(name, price, dur, posFn) {
+    if (this.on || World.driving) return; if (!Wallet.spend(price, name)) return;
+    const p = World.player, from = { x: p.x, z: p.z }; World.setInputBlocked(true); Sfx.play('whoosh'); UI.toast(name + ': ¡disfruta del viaje!', 'good');
+    const t0 = performance.now(); this.on = true;
+    const step = () => { const t = (performance.now() - t0) / 1000; if (t < dur) { const q = posFn(t); p.x = q.x; p.y = q.y; p.z = q.z; requestAnimationFrame(step); } else { p.x = from.x; p.z = from.z; p.y = 0; this.on = false; World.setInputBlocked(false); Prog.addXp && Prog.addXp(5); UI.toast('Fin del viaje · +5 de reputación', 'good'); } };
+    requestAnimationFrame(step);
+  },
+};
+
+/* ---------------- Discoteca Pulse (interior) ---------------- */
+function buildClub() {
+  const sc = buildFloor({
+    id: 'club', label: 'DISCOTECA PULSE', music: 'roof', ox: 0, oz: 0, hx: 8.1, hz: 5.1, h: 5.5, doorS: 1.2, fog: [0x0a0418, 30, 80], amb: [[.2, .12, .3], [.12, .08, .2], [.04, .02, .06]],
+    carpet: { base: '#14081e', line: 'rgba(255,61,154,.35)', dot: 'rgba(63,242,255,.3)' }, wall: { base: '#160a24', top: '#0a0412', dado: '#0e0618', gold: '#ff3d9a', neon: '#3ff2ff' },
+    lights: lt => { lt(0, 4, 0, '#ff3d9a', 9, 1.4); lt(-5, 4, -2, '#3ff2ff', 7, 1.2); lt(5, 4, -2, '#b45cff', 7, 1.2); lt(-6.5, 3, 2, '#ffcf5a', 6, 1.1); lt(0, 3, -4, '#3df58a', 6, 1); },
+  }, k => {
+    const { sc, G, gl1, gl3, gl8 } = k;
+    sc.cam = { pitch: .82, dist: 9.5, min: 5, max: 13 };
+    sc.colliders.push({ x0: -8.6, x1: -1.2, z0: 4.9, z1: 7 }, { x0: 1.2, x1: 8.6, z0: 4.9, z1: 7 }); sc.bounds.z1 = 6.9;
+    // pista de baile animada
+    const df = makeAnimTex(sc, 256, 160, (g, w, h, t) => { const cs = ['#ff3d9a', '#3ff2ff', '#b45cff', '#ffcf5a', '#3df58a']; for (let x = 0; x < 8; x++) for (let y = 0; y < 5; y++) { const v = Math.sin(t * 3 + x * .9 + y * 1.3); g.fillStyle = v > .3 ? cs[(x + y + Math.floor(t * 2)) % 5] : '#1a0e28'; g.fillRect(x * 32 + 1, y * 32 + 1, 30, 30); } }, .12);
+    { const p = new THREE.Mesh(new THREE.PlaneGeometry(8, 5), new THREE.MeshBasicMaterial({ map: df })); p.rotation.x = -Math.PI / 2; p.position.set(0, .025, 0); sc.group.add(p); }
+    // cabina del DJ y pantalla
+    G.box(-2.4, 0, -4.9, 2.4, 1.1, -3.6, '#1a1030', { top: '#2a1a40' }); for (let i = 0; i < 10; i++) G.box(-2.2 + i * .44, 1.1, -4.6, -1.9 + i * .44, 1.14, -4.2, ['#ff3d9a', '#3ff2ff', '#3df58a'][i % 3], { lit: false });
+    sc.colliders.push({ x0: -2.4, x1: 2.4, z0: -5.2, z1: -3.6 });
+    k.npc(0, -4.4, 0, { skin: '#c8906a', hair: '#111', shirt: '#151515', sleeve: '#151515', pants: '#1a1a22', shoes: '#111', hairStyle: 2, glasses: '#111111', frame: '#ff3d9a' });
+    k.screen(8, 2.6, [0, 3.3, -5.05], 0, (g, w, h, t) => { g.fillStyle = '#05020a'; g.fillRect(0, 0, w, h); for (let i = 0; i < 32; i++) { const v = Math.abs(Math.sin(t * 4 + i * .6) * Math.sin(t * 1.3 + i)) * h * .8; g.fillStyle = `hsl(${(i * 11 + t * 60) % 360},100%,60%)`; g.fillRect(i * w / 32 + 2, h - v, w / 32 - 4, v); } neonText(g, 'PULSE', w / 2, h * .25, h * .26, '#fff', '#ff3d9a'); }, .08);
+    // escenarios con bailarines (ropa de calle) y público
+    for (const x of [-6.2, 6.2]) { G.cyl(x, 0, -2.6, 1.1, .5, 16, '#2a1a40', { topColor: '#3ff2ff' }); sc.circles.push({ x, z: -2.6, r: 1.2 }); gl8.add(x, 2, -2.6, '#3ff2ff', .35); }
+    const dancers = [], looks = [{ shirt: '#ff3d9a', sleeve: '#ff3d9a', pants: '#1a1a2a', hair: '#2a1208', hairStyle: 1 }, { shirt: '#3ff2ff', sleeve: '#151515', pants: '#222', hair: '#e8c070', hairStyle: 3 }];
+    [[-6.2, .5], [6.2, .5]].forEach(([x, y], i) => { const h = makeHuman(randomLook(looks[i])); h.root.position.set(x, y, -2.6); sc.group.add(h.root); dancers.push({ h, x, y, z: -2.6, ph: i * 1.7, s: 1.6 }); });
+    for (let i = 0; i < 7; i++) { const a = i / 7 * TAU, x = Math.cos(a) * 2.6, z = Math.sin(a) * 1.5; const h = makeHuman(randomLook()); h.root.position.set(x, 0, z); sc.group.add(h.root); dancers.push({ h, x, y: 0, z, ph: i, s: .9 + (i % 3) * .2 }); }
+    k.upd.push((dt, t) => { for (const d of dancers) { const b = Math.abs(Math.sin(t * 4 + d.ph)); d.h.root.position.set(d.x + Math.sin(t * 1.3 + d.ph) * .15, d.y + b * .12 * d.s, d.z); d.h.root.rotation.y = Math.sin(t * 1.1 + d.ph) * 1.4; d.h.animate(dt, .9 * d.s, t + d.ph); } });
+    // láseres
+    { const pos = [], col = []; for (let i = 0; i < 10; i++) { pos.push(0, 5.2, -4.8, 0, 0, 0); col.push(1, .2, .6, 1, .2, .6); } const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); lg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      const lz = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false })); sc.group.add(lz); const P = lg.attributes.position, Cc = lg.attributes.color;
+      k.upd.push((dt, t) => { for (let i = 0; i < 10; i++) { const a = Math.sin(t * .9 + i * .7) * 1.2; P.setXYZ(i * 2 + 1, Math.sin(a) * 7, 0, -4.8 + Math.cos(a) * 9); const c = new THREE.Color().setHSL((t * .2 + i / 10) % 1, 1, .55); Cc.setXYZ(i * 2, c.r, c.g, c.b); Cc.setXYZ(i * 2 + 1, c.r, c.g, c.b); } P.needsUpdate = true; Cc.needsUpdate = true; }); }
+    // barra
+    G.box(-8.1, 0, -.5, -6.6, 1.1, 3.6, '#1a0e28', { top: '#3ff2ff' }); sc.colliders.push({ x0: -8.1, x1: -6.6, z0: -.5, z1: 3.6 }); for (let z = -.2; z < 3.4; z += .5) gl1.add(-6.6, 1.05, z, '#3ff2ff', .3);
+    k.npc(-7.6, 1.5, Math.PI / 2, k.staff({ shirt: '#151515', sleeve: '#151515', stripe: '#ff3d9a' }));
+    sc.interact.push({ x: -5.8, z: 1.5, r: 1.6, label: 'Barra Pulse', sub: 'Refresco o batido · 5 € (la mitad es para el dueño)', fn: () => { if (!Wallet.spend(500, 'Discoteca Pulse')) return; bizSpend('club', 500); Sfx.play('pour'); FX.float(null, '🥤 ¡Salud!', '#3ff2ff', 34); Prog.addXp && Prog.addXp(2); } });
+    sc.interact.push({ x: 0, z: 1.2, r: 2.2, label: 'Bailar en la pista', sub: 'Minijuego de ritmo · ganas propinas', fn: () => UI.open('dance') });
+    k.sign('PULSE', '#ff3d9a', 3, [5.5, 3.9, -5.05], 0);
+  });
+  return sc;
+}
+
+/* ---------------- Distrito Norte ---------------- */
+function buildNorte() {
+  const sc = { label: 'DISTRITO NORTE · NEON PARK', music: 'city', group: new THREE.Group(), colliders: [], circles: [], interact: [], anims: [], lights: [], walls: null,
+    cam: { pitch: .4, dist: 8.5, min: 4, max: 16 }, camCollide: true, fog: [0x1a1236, 40, 165], outdoor: true,
+    bounds: { x0: -61.5, x1: 39.6, z0: -121, z1: -33.6 }, spawn: { x: 34, z: -40, yaw: 0, ry: Math.PI } };
+  const LAMPS = []; for (let x = -54; x <= 30; x += 12) LAMPS.push([x, -65.4], [x, -76.6]); for (let z = -42; z >= -106; z -= 12) LAMPS.push([-28.4, z], [28.4, z]);
+  const WC = { x: 0, y: 11.5, z: -55, R: 9 };
+  return buildFloor({
+    extend: sc, ox: 0, oz: 0, amb: [Bake.sky, Bake.gnd, Bake.dirC],
+    lights: lt => { for (const [x, z] of LAMPS) lt(x, 6, z, '#ffb870', 11, 1.05); lt(0, 4, -50, '#ff3d9a', 14, 1.2); lt(-20, 4, -45, '#ffcf5a', 8, 1); lt(18, 4, -48, '#3ff2ff', 9, 1); lt(-51, 4, -52, '#b45cff', 10, 1.2); lt(-24, 4, -80, '#3df58a', 9, 1); lt(0, 6, -94, '#ffffff', 16, .9); },
+  }, k => {
+    const { G, gl1, gl3, gl8 } = k, C = sc.colliders, CI = sc.circles;
+    const box = (x0, z0, x1, z1, h) => C.push({ x0, x1, z0, z1, h });
+    // suelo y calles
+    G.floor(-62, -122, 40, -33.6, .012, '#4a4456', true);
+    for (const [x0, x1] of [[-39, -29], [29, 39]]) G.floor(x0, -112, x1, -33.6, .016, '#25222f', true);
+    G.floor(-62, -76, 40, -66, .017, '#25222f', true); for (let x = -60; x < 38; x += 6) G.floor(x, -71.07, x + 3, -70.93, .02, '#e8e8e8', false);
+    for (const sx of [-34, 34]) for (let z = -110; z < -36; z += 6) if (z < -78 || z > -64) G.floor(sx - .07, z, sx + .07, z + 3, .02, '#e8e8e8', false);
+    for (const [x, z] of LAMPS) { G.cyl(x, 0, z, .1, 6, 6, '#2a2a34'); G.box(x - .22, 5.75, z - .2, x + .22, 5.95, z + .2, '#2a2a34', { bottom: '#fff2d0', bottomLit: false }); gl3.add(x, 5.65, z, '#ffc880', .9); CI.push({ x, z, r: .2 }); }
+    const tree = (x, z) => { G.cyl(x, 0, z, .14, 2.4, 6, '#4a3020'); G.cyl(x, 2.1, z, 1.35, 1.3, 7, '#1f5a34', { r2: 1.05, topColor: '#2a7040' }); G.cyl(x, 3.4, z, 1.05, 1.2, 7, '#247040', { r2: .25 }); CI.push({ x, z, r: .3 }); };
+
+    // ===== NEON PARK =====
+    G.floor(-28, -64, 28, -40, .02, '#3a2a4a', true);
+    for (let x = -28; x < 28; x += 2) for (let z = -64; z < -40; z += 2) if (((x + z) / 2) & 1) G.floor(x, z, x + 2, z + 2, .022, '#432f56', true);
+    for (const x of [-27.5, 27.5]) { G.box(x - .3, 0, -54, x + .3, 6, -53.4, '#ff3d9a'); G.box(x - .3, 0, -46.6, x + .3, 6, -46, '#ff3d9a'); G.box(x - .3, 6, -54, x + .3, 6.6, -46, '#3ff2ff'); for (let z = -53.6; z < -46.2; z += .5) gl1.add(x, 6.3, z, '#ffcf5a', .4); }
+    k.sign('NEON PARK', '#ff3d9a', 6, [27.9, 7.4, -50], Math.PI / 2); k.sign('NEON PARK', '#3ff2ff', 6, [-27.9, 7.4, -50], -Math.PI / 2);
+    for (const [x0, x1] of [[-28, -27.2], [27.2, 28]]) for (const [z0, z1] of [[-64, -54], [-46, -40]]) { G.box(x0, 0, z0, x1, 1, z1, '#2a2440', { top: '#ff3d9a' }); box(x0, z0, x1, z1, 1); }
+    // noria
+    { const wheel = new THREE.Group(), rimM = new THREE.MeshBasicMaterial({ color: 0xe8e4f0 }), cabs = [];
+      for (let i = 0; i < 36; i++) { const a = i / 36 * TAU, b = new THREE.Mesh(new THREE.BoxGeometry(.25, 1.65, .25), rimM); b.position.set(Math.cos(a) * WC.R, Math.sin(a) * WC.R, 0); b.rotation.z = a; wheel.add(b); }
+      for (let i = 0; i < 12; i++) { const a = i / 12 * TAU, s = new THREE.Mesh(new THREE.BoxGeometry(.12, WC.R, .12), rimM); s.position.set(Math.cos(a) * WC.R / 2, Math.sin(a) * WC.R / 2, 0); s.rotation.z = a - Math.PI / 2; wheel.add(s);
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.3, 1.3), new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(i / 12, .8, .55) })); cab.position.set(Math.cos(a) * WC.R, Math.sin(a) * WC.R - .9, 0); wheel.add(cab); cabs.push({ cab, a }); }
+      const lights = new Glows(1.3); for (let i = 0; i < 48; i++) { const a = i / 48 * TAU; lights.add(Math.cos(a) * (WC.R + .2), Math.sin(a) * (WC.R + .2), .2, ['#ff3d9a', '#3ff2ff', '#ffcf5a'][i % 3], .5); } wheel.add(lights.build());
+      wheel.position.set(WC.x, WC.y, WC.z); sc.group.add(wheel); Rides.wheel = wheel; Rides.cabs = cabs;
+      k.upd.push((dt, t) => { wheel.rotation.z = t * .16; for (const c of cabs) { const a = c.a + wheel.rotation.z; c.cab.position.set(Math.cos(c.a) * WC.R, Math.sin(c.a) * WC.R - .9, 0); c.cab.rotation.z = -wheel.rotation.z; } });
+      for (const dz of [-1.4, 1.4]) { G.setXf(WC.x, 0, WC.z + dz, 0); G.box(-4.2, 0, -.2, -3.8, .3, .2, '#c8c4d0'); G.box(3.8, 0, -.2, 4.2, .3, .2, '#c8c4d0'); G.setXf(0, 0, 0, 0); }
+      for (const [sx, dz] of [[-1, -1.4], [1, -1.4], [-1, 1.4], [1, 1.4]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(.35, WC.y * 1.15, .35), rimM); m.position.set(WC.x + sx * 2.4, WC.y / 2, WC.z + dz); m.rotation.z = sx * .2; sc.group.add(m); }
+      box(WC.x - 4.4, WC.z - 1.8, WC.x + 4.4, WC.z + 1.8, 3);
+      G.box(-1.5, 0, -52.6, 1.5, .4, -51.4, '#3a2a5a', { top: '#ffcf5a' });
+      sc.interact.push({ x: 0, z: -50.6, r: 2, label: 'Noria Neón', sub: 'Una vuelta con vistas a toda la ciudad · 3 €', fn: () => {
+        Rides.start('Noria Neón', 300, 2 * Math.PI / .16, t => { const ang = -Math.PI / 2 + t * .16; return { x: WC.x + Math.cos(ang) * WC.R, y: WC.y + Math.sin(ang) * WC.R - 1.5, z: WC.z + 1.1 }; }); } });
+    }
+    // carrusel
+    { const car = new THREE.Group(); const base = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, .4, 24), new THREE.MeshBasicMaterial({ color: 0xffcf5a })); car.add(base);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(4.4, 1.6, 24), new THREE.MeshBasicMaterial({ color: 0xff3d9a })); roof.position.y = 3.6; car.add(roof);
+      for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, p = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, 3, 6), new THREE.MeshBasicMaterial({ color: 0xe8e4dc })); p.position.set(Math.cos(a) * 3.1, 1.6, Math.sin(a) * 3.1); car.add(p);
+        const h = new THREE.Mesh(new THREE.BoxGeometry(.4, .6, 1.1), new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(i / 8, .7, .7) })); h.position.set(Math.cos(a) * 3.1, 1.1, Math.sin(a) * 3.1); h.rotation.y = -a; car.add(h); }
+      car.position.set(17, 0, -50); sc.group.add(car); CI.push({ x: 17, z: -50, r: 4.1 }); gl8.add(17, 3, -50, '#ffcf5a', .4);
+      k.upd.push((dt, t) => { car.rotation.y = t * .5; car.children.forEach((c, i) => { if (i > 1 && i % 2 === 1) c.position.y = 1.1 + Math.sin(t * 2 + i) * .25; }); });
+      sc.interact.push({ x: 17, z: -45.2, r: 1.8, label: 'Carrusel', sub: 'Una vuelta tranquila · 2 €', fn: () => Rides.start('Carrusel', 200, 20, t => { const a = t * .5 + .5; return { x: 17 + Math.cos(-a) * 3.1, y: .9, z: -50 + Math.sin(-a) * 3.1 }; }) });
+    }
+    // tiro al blanco y algodón de azúcar
+    G.box(-23, 0, -47.4, -17, 2.6, -45.4, '#5a1a2a'); for (let i = 0; i < 6; i++) G.box(-23 + i, 2.6, -45.4, -22 + i, 2.9, -44.2, i % 2 ? '#fff' : '#c8102e'); box(-23, -47.4, -17, -45.4, 3);
+    k.sign('TIRO AL BLANCO', '#ffcf5a', 4.4, [-20, 3.6, -45.35], 0); sc.interact.push({ x: -20, z: -43.6, r: 2, label: 'Tiro al blanco', sub: '2 € · premios según tu puntería', fn: () => UI.open('shoot') });
+    G.box(-14, 0, -62, -10, 2.4, -60, '#ff9fd0', { top: '#fff' }); k.sign('ALGODÓN', '#ff9fd0', 3, [-12, 3, -59.95], 0); box(-14, -62, -10, -60, 2.4);
+    sc.interact.push({ x: -12, z: -58.6, r: 1.6, label: 'Algodón de azúcar', sub: '2 €', fn: () => { if (!Wallet.spend(200, 'Neon Park')) return; Sfx.play('pop'); FX.float(null, '🍭 ¡Qué rico!', '#ff9fd0', 32); Prog.addXp && Prog.addXp(1); } });
+    for (const [x, z] of [[-25, -62], [25, -62], [-25, -42], [24, -42]]) tree(x, z);
+
+    // ===== KARTS =====
+    { const tt = ctex(512, 256, g => { g.fillStyle = '#2f6a3a'; g.fillRect(0, 0, 512, 256); g.strokeStyle = '#2a2830'; g.lineWidth = 46; g.beginPath(); g.ellipse(256, 128, 200, 88, 0, 0, TAU); g.stroke(); g.setLineDash([12, 12]); g.lineWidth = 4; g.strokeStyle = '#fff'; g.beginPath(); g.ellipse(256, 128, 223, 111, 0, 0, TAU); g.stroke(); g.beginPath(); g.ellipse(256, 128, 177, 65, 0, 0, TAU); g.stroke(); g.strokeStyle = '#c8102e'; g.beginPath(); g.ellipse(256, 128, 225, 113, 0, 0, TAU); g.stroke(); g.setLineDash([]); g.fillStyle = '#fff'; for (let i = 0; i < 8; i++) g.fillRect(452 + (i % 2) * 6, 108 + i * 5, 6, 5); }).tex;
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(56, 30), new THREE.MeshBasicMaterial({ map: tt })); p.rotation.x = -Math.PI / 2; p.position.set(0, .03, -94); sc.group.add(p);
+      const karts = []; for (let i = 0; i < 4; i++) { const g2 = new Geo(); g2.box(-.9, .1, -.5, .9, .5, .5, ['#ff3d9a', '#3ff2ff', '#ffcf5a', '#3df58a'][i]); g2.box(-.2, .5, -.3, .4, .9, .3, '#222'); const m = g2.build(); sc.group.add(m); karts.push({ m, ph: i * 1.2, sp: .55 + i * .05 }); }
+      k.upd.push((dt, t) => { for (const kk of karts) { const a = t * kk.sp + kk.ph, x = Math.cos(a) * 21.9, z = -94 + Math.sin(a) * 9.6; kk.m.position.set(x, 0, z); kk.m.rotation.y = -Math.atan2(Math.cos(a) * 9.6, -Math.sin(a) * 21.9); } });
+      for (let i = 0; i < 40; i++) { const a = i / 40 * TAU; G.cyl(Math.cos(a) * 25.5, 0, -94 + Math.sin(a) * 13, .45, .5, 8, i % 2 ? '#111' : '#c8102e'); }
+      box(-28, -108, 28, -107.4, 1); box(-28, -80.6, -6, -80, 1); box(6, -80.6, 28, -80, 1); }
+    G.box(-6, 0, -81, 6, 3.4, -78, '#2a3a2a', { top: '#1a2a1a' }); box(-6, -81, 6, -78, 3.4); G.rect('s', -78, -5, 5, .5, 2.6, '#cfeac0', false, .02);
+    k.sign('KARTING NEÓN', '#3df58a', 5, [0, 4.2, -77.95], 0); sc.interact.push({ x: 0, z: -76.4, r: 2.2, label: 'Karting Neón', sub: 'Carrera de 3 vueltas · 5 € · premios hasta 15 €', fn: () => UI.open('karts') });
+
+    // ===== RECREATIVOS =====
+    G.box(-60, 0, -62, -42, 6, -42, '#2a1440', { top: '#1a0a2a' }); box(-60, -62, -42, -42, 6);
+    G.rect('e', -42, -58, -46, .5, 3.4, '#ffe8b8', false, .02); G.rect('e', -42, -53, -51, 0, 2.9, '#1a1418', false, .025);
+    k.sign('RECREATIVOS', '#b45cff', 6, [-41.9, 4.6, -52], Math.PI / 2); for (let z = -61.5; z < -42.5; z += .8) gl1.add(-41.9, 5.8, z, '#b45cff', .4);
+    sc.interact.push({ x: -40.2, z: -52, r: 2.2, label: 'Salón recreativo', sub: 'Neon Snake · 1 € la partida · premios según puntos', fn: () => UI.open('snake') });
+    // parque oeste y edificios del fondo
+    G.floor(-61.5, -110, -41, -78, .02, '#2f6a3a', true); for (const [x, z] of [[-56, -84], [-46, -86], [-52, -96], [-58, -104], [-45, -104]]) tree(x, z);
+    k.sign('NEON PARK ↑', '#ff3d9a', 3.6, [34, 3.4, -33.8], Math.PI); k.sign('RECREATIVOS · KARTS ↑', '#3df58a', 4.6, [-34, 3.4, -33.8], Math.PI);
+    const R = seeded(77), pal = ['#2a2741', '#30293f', '#3a2f3a', '#283040', '#3a3450'];
+    for (let z = -110; z < -36;) { const d = 7 + R() * 7, h = 10 + R() * 26; if (z + d > -35) break; G.box(39.6, 0, z, 48, h, z + d, pal[Math.floor(R() * 5)], { top: '#1d1a2a' }); for (let y = 4; y + 1.6 < h; y += 3.2) for (let a = z + .6; a + 1.2 < z + d; a += 2.4) if (R() < .5) G.rect('w', 39.6, a, a + 1.2, y, y + 1.5, '#ffd58a', false, .04); z += d + .4; }
+    for (let x = -62; x < 40;) { const w = 7 + R() * 8, h = 14 + R() * 30; G.box(x, 0, -132, x + w, h, -121.4, pal[Math.floor(R() * 5)], { top: '#1d1a2a' }); for (let y = 4; y + 1.6 < h; y += 3.2) for (let a = x + .6; a + 1.2 < x + w; a += 2.4) if (R() < .45) G.rect('s', -121.4, a, a + 1.2, y, y + 1.5, '#ffd58a', false, .04); x += w + .4; }
+    k.walker([[-31, -40], [-31, -108]]); k.walker([[31, -108], [31, -40]]); k.walker([[-24, -44], [24, -44], [24, -62], [-24, -62]]); k.walker([[20, -60], [-20, -60]]); k.walker([[-55, -64.5], [25, -64.5]]); k.walker([[-25, -77.4], [25, -77.4]]);
+    for (const [x, z] of [[-8, -43], [8, -43], [12, -60]]) k.npc(x, z, Math.PI, null, false);
+  });
+}
+
+/* ================= Minijuegos ================= */
+/* Baile: notas que bajan por 4 carriles; pulsa ← ↑ ↓ → (o D F J K) a tiempo */
+Games.dance = {
+  title: 'BAILE', sub: 'Discoteca Pulse · sigue el ritmo', theme: 't-jetx',
+  rules: `<h3>Baile</h3><ul><li>Las flechas bajan al ritmo de la música. Pulsa <b>← ↑ ↓ →</b> (o <b>D F J K</b>, o toca el carril) cuando lleguen a la línea.</li><li>Perfecto = 100 puntos, bien = 50. El combo multiplica.</li><li>Al final el público te da propinas según tu puntuación (hasta 6 €).</li></ul>`,
+  mount(body) {
+    const { stage, side } = split2(body); const cv = el('canvas', { class: 'gc' }); stage.append(cv);
+    const sS = statBox('Puntos', '0'), sC = statBox('Combo', '×0'), go = el('button', { class: 'btn primary wide', text: 'Empezar (30 s)', onclick: () => start() }); side.append(go, sS.el, sC.el, el('p', { class: 'note', text: 'Teclas: ← ↑ ↓ → o D F J K' }));
+    const S = this.S = { alive: true, on: false, notes: [], score: 0, combo: 0, t0: 0, fx: [] }; let W = 0, H = 0, g = null;
+    S.off = observe(stage, () => { const r = stage.getBoundingClientRect(); W = Math.max(200, r.width); H = Math.max(200, r.height); cv.style.width = W + 'px'; cv.style.height = H + 'px'; g = fitCanvas(cv, W, H); });
+    const BPM = 124, beat = 60 / BPM, DUR = 30, COL = ['#ff3d9a', '#3ff2ff', '#3df58a', '#ffcf5a'], AR = ['←', '↑', '↓', '→'];
+    function start() { S.on = true; S.score = 0; S.combo = 0; S.notes = []; for (let b = 4; b < DUR / beat; b++) { if (RNG.float() < .75) S.notes.push({ t: b * beat, l: Math.floor(RNG.float() * 4), hit: false }); if (RNG.float() < .15) S.notes.push({ t: b * beat + beat / 2, l: Math.floor(RNG.float() * 4), hit: false }); } S.t0 = performance.now(); go.disabled = true; Sfx.play('whoosh'); }
+    S.hit = l => { if (!S.on) return; const t = (performance.now() - S.t0) / 1000; let best = null, bd = .2; for (const n of S.notes) if (!n.hit && n.l === l && Math.abs(n.t - t) < bd) { bd = Math.abs(n.t - t); best = n; }
+      if (!best) { S.combo = 0; Sfx.play('error'); return; } best.hit = true; const p = bd < .07 ? 100 : 50; S.combo++; S.score += p * (1 + Math.floor(S.combo / 8)); Sfx.play(p === 100 ? 'chip' : 'tick'); S.fx.push({ l, t: performance.now(), txt: p === 100 ? 'PERFECTO' : 'BIEN' }); sS.set(String(S.score)); sC.set('×' + S.combo, S.combo > 7); };
+    cv.addEventListener('pointerdown', e => { const r = cv.getBoundingClientRect(); S.hit(Math.min(3, Math.floor((e.clientX - r.left) / r.width * 4))); });
+    const frame = () => {
+      if (!S.alive) return; S.raf = requestAnimationFrame(frame); if (!g) return;
+      const t = S.on ? (performance.now() - S.t0) / 1000 : 0, lw = W / 4, hitY = H * .82, sp = H * .55;
+      g.fillStyle = '#0a0418'; g.fillRect(0, 0, W, H);
+      for (let l = 0; l < 4; l++) { g.fillStyle = l % 2 ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.06)'; g.fillRect(l * lw, 0, lw, H); neonText(g, AR[l], l * lw + lw / 2, hitY, lw * .3, 'rgba(255,255,255,.35)', COL[l]); }
+      g.fillStyle = 'rgba(255,255,255,.4)'; g.fillRect(0, hitY - 2, W, 4);
+      if (S.on) { for (const n of S.notes) { if (n.hit) continue; const y = hitY - (n.t - t) * sp; if (y < -40 || y > H + 40) continue; if (t - n.t > .2 && !n.miss) { n.miss = true; S.combo = 0; sC.set('×0'); } neonText(g, AR[n.l], n.l * lw + lw / 2, y, lw * .34, '#fff', COL[n.l]); }
+        for (const f of S.fx) { const k = (performance.now() - f.t) / 600; if (k < 1) neonText(g, f.txt, f.l * lw + lw / 2, hitY - 60 - k * 30, lw * .14, '#fff', COL[f.l]); } S.fx = S.fx.filter(f => performance.now() - f.t < 600);
+        if (t > DUR) { S.on = false; go.disabled = false; go.textContent = 'Otra vez'; const tip = Math.min(600, Math.floor(S.score / 40)); if (tip > 0) { Wallet.earn(tip, 'dance'); UI.celebrate(tip, 100, cv); UI.toast('El público te da ' + fmt(tip) + ' de propina', 'good'); } else UI.toast('El público espera más ritmo…', ''); Prog.addXp && Prog.addXp(4); } }
+      else neonText(g, S.score ? S.score + ' PUNTOS' : 'PULSA EMPEZAR', W / 2, H * .4, Math.min(40, W * .07), '#fff', '#ff3d9a');
+    };
+    S.raf = requestAnimationFrame(frame);
+  },
+  onKey(e) { const l = { ArrowLeft: 0, KeyD: 0, ArrowUp: 1, KeyF: 1, ArrowDown: 2, KeyJ: 2, ArrowRight: 3, KeyK: 3 }[e.code]; if (l != null) { e.preventDefault(); this.S.hit(l); } },
+  canClose() { if (this.S.on) { UI.toast('Termina el baile antes de salir', 'bad'); return false; } return true; },
+  unmount() { this.S.alive = false; cancelAnimationFrame(this.S.raf); this.S.off(); },
+};
+
+/* Tiro al blanco: 20 s, 15 disparos, patos que cruzan; los dorados valen más */
+Games.shoot = {
+  title: 'TIRO AL BLANCO', sub: 'Neon Park · 2 € la ronda', theme: 't-jetx',
+  rules: `<h3>Tiro al blanco</h3><ul><li>Cada ronda cuesta 2 € y tienes 15 disparos y 20 segundos.</li><li>Pato normal 1 punto, pato dorado 3 puntos.</li><li>Premios: 8+ puntos 2 €, 12+ 4 €, 16+ 8 €, 22+ 15 €.</li></ul>`,
+  mount(body) {
+    const { stage, side } = split2(body); const cv = el('canvas', { class: 'gc', style: 'cursor:crosshair' }); stage.append(cv);
+    const sP = statBox('Puntos', '0'), sA = statBox('Disparos', '15'), sT = statBox('Tiempo', '20 s'), go = el('button', { class: 'btn primary wide', text: 'Jugar · 2 €', onclick: () => start() }); side.append(go, sP.el, sA.el, sT.el);
+    const S = this.S = { alive: true, on: false, ducks: [], pts: 0, ammo: 15, t: 0, spawn: 0, shots: [] }; let W = 0, H = 0, g = null;
+    S.off = observe(stage, () => { const r = stage.getBoundingClientRect(); W = Math.max(200, r.width); H = Math.max(200, r.height); cv.style.width = W + 'px'; cv.style.height = H + 'px'; g = fitCanvas(cv, W, H); });
+    function start() { if (S.on || !Wallet.bet(200, 'shoot')) return; S.on = true; S.ducks = []; S.pts = 0; S.ammo = 15; S.t = 20; S.spawn = 0; go.disabled = true; upd(); Sfx.play('whoosh'); }
+    function upd() { sP.set(String(S.pts), S.pts > 0); sA.set(String(S.ammo)); sT.set(Math.ceil(Math.max(0, S.t)) + ' s'); }
+    function end() { S.on = false; go.disabled = false; go.textContent = 'Otra ronda · 2 €'; const p = S.pts >= 22 ? 1500 : S.pts >= 16 ? 800 : S.pts >= 12 ? 400 : S.pts >= 8 ? 200 : 0; if (p) { Wallet.pay(p, 'shoot'); UI.celebrate(p, 200, cv); } else { Sfx.play('lose'); UI.toast(S.pts + ' puntos: sin premio esta vez', ''); } }
+    cv.addEventListener('pointerdown', e => {
+      if (!S.on || S.ammo <= 0) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; S.ammo--; Sfx.play('pop'); S.shots.push({ x, y, t: performance.now() });
+      const d = S.ducks.find(d => !d.dead && Math.abs(d.x - x) < d.s * .7 && Math.abs(d.y - y) < d.s * .55);
+      if (d) { d.dead = performance.now(); S.pts += d.gold ? 3 : 1; Sfx.play(d.gold ? 'win' : 'chip'); FX.float({ x: e.clientX, y: e.clientY }, d.gold ? '+3' : '+1', d.gold ? '#ffcf5a' : '#fff', 30); }
+      upd(); if (S.ammo <= 0) setTimeout(() => S.on && end(), 600);
+    });
+    let last = performance.now();
+    const frame = now => {
+      if (!S.alive) return; const dt = Math.min(.05, (now - last) / 1000); last = now; S.raf = requestAnimationFrame(frame); if (!g) return;
+      if (S.on) { S.t -= dt; S.spawn -= dt; if (S.spawn <= 0) { const row = Math.floor(RNG.float() * 3), dir = row % 2 ? -1 : 1, s = Math.min(W, H) * .1; S.ducks.push({ x: dir > 0 ? -s : W + s, y: H * (.25 + row * .22), v: dir * (W * (.18 + RNG.float() * .14)), s, gold: RNG.float() < .18 }); S.spawn = .45 + RNG.float() * .5; }
+        for (const d of S.ducks) d.x += d.v * dt; S.ducks = S.ducks.filter(d => d.x > -d.s * 2 && d.x < W + d.s * 2 && !(d.dead && now - d.dead > 400)); if (S.t <= 0) end(); else if (Math.floor(S.t * 10) % 5 === 0) upd(); }
+      const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#1a2a5a'); gr.addColorStop(1, '#0a1230'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      for (let r = 0; r < 3; r++) { g.fillStyle = '#2a5ab0'; const y = H * (.25 + r * .22) + Math.min(W, H) * .07; g.fillRect(0, y, W, 8); }
+      for (const d of S.ducks) { const a = d.dead ? 1 - (now - d.dead) / 400 : 1; g.globalAlpha = Math.max(0, a); g.fillStyle = d.gold ? '#ffcf3a' : '#f2f2f2'; g.beginPath(); g.ellipse(d.x, d.y, d.s * .6, d.s * .4, 0, 0, TAU); g.fill(); g.beginPath(); g.arc(d.x + Math.sign(d.v) * d.s * .45, d.y - d.s * .35, d.s * .25, 0, TAU); g.fill(); g.fillStyle = '#ff8a2a'; g.fillRect(d.x + Math.sign(d.v) * d.s * .62 - (d.v < 0 ? d.s * .2 : 0), d.y - d.s * .38, d.s * .2, d.s * .1); g.globalAlpha = 1; }
+      for (const s of S.shots) { const k = (now - s.t) / 300; if (k < 1) { g.strokeStyle = `rgba(255,207,90,${1 - k})`; g.lineWidth = 3; g.beginPath(); g.arc(s.x, s.y, 8 + k * 20, 0, TAU); g.stroke(); } } S.shots = S.shots.filter(s => now - s.t < 300);
+      if (!S.on) neonText(g, S.pts ? S.pts + ' PUNTOS' : 'TIRO AL BLANCO', W / 2, H * .9, Math.min(34, W * .06), '#fff', '#ffcf5a');
+    };
+    S.raf = requestAnimationFrame(frame);
+  },
+  canClose() { if (this.S.on) { UI.toast('Termina la ronda antes de salir', 'bad'); return false; } return true; },
+  unmount() { this.S.alive = false; cancelAnimationFrame(this.S.raf); this.S.off(); },
+};
+
+/* Karts: 3 vueltas contra 3 rivales en el circuito ovalado */
+Games.karts = {
+  title: 'KARTING NEÓN', sub: '3 vueltas · inscripción 5 €', theme: 't-jetx',
+  rules: `<h3>Karts</h3><ul><li>Inscripción 5 €. Carrera de 3 vueltas contra 3 rivales.</li><li><b>← →</b> (o A/D) para girar, <b>↑</b> o W acelera, <b>↓</b> o S frena. Fuera de la pista vas más lento.</li><li>Premios: 1º 15 €, 2º 7 €, 3º 3 €.</li></ul>`,
+  mount(body) {
+    const { stage, side } = split2(body); const cv = el('canvas', { class: 'gc' }); stage.append(cv);
+    const sL = statBox('Vuelta', '—'), sP = statBox('Posición', '—'), sB = statBox('Mejor vuelta', Store.get('kart_best', 0) ? (Store.get('kart_best', 0) / 1000).toFixed(2) + ' s' : '—');
+    const go = el('button', { class: 'btn primary wide', text: 'Correr · 5 €', onclick: () => start() }); side.append(go, sL.el, sP.el, sB.el, el('p', { class: 'note', text: 'Flechas o WASD' }));
+    const S = this.S = { alive: true, on: false, keys: new Set(), cars: [], cd: 0 }; let W = 0, H = 0, g = null;
+    S.off = observe(stage, () => { const r = stage.getBoundingClientRect(); W = Math.max(240, r.width); H = Math.max(200, r.height); cv.style.width = W + 'px'; cv.style.height = H + 'px'; g = fitCanvas(cv, W, H); });
+    const RX = .38, RY = .33, TW = .085; // óvalo en coordenadas relativas
+    const pt = a => [.5 + Math.cos(a) * RX, .5 + Math.sin(a) * RY];
+    function start() {
+      if (S.on || !Wallet.bet(500, 'karts')) return;
+      const mk = (i, col, ai) => { const a = -Math.PI / 2 - .05 - i * .045, [x, y] = pt(a); return { x, y: y + (i % 2 ? .025 : -.025), h: 0, v: 0, col, ai, prog: 0, lap: 0, last: a, done: 0, sk: .9 + RNG.float() * .12, lapT: performance.now() }; };
+      S.cars = [mk(0, '#ffcf5a', false), mk(1, '#ff3d9a', true), mk(2, '#3ff2ff', true), mk(3, '#3df58a', true)]; S.cars.forEach(c => c.h = 0);
+      S.on = true; S.cd = 3; S.fin = []; go.disabled = true; Sfx.play('whoosh');
+    }
+    const ang = c => Math.atan2((c.y - .5) / RY, (c.x - .5) / RX);
+    let last = performance.now();
+    const frame = now => {
+      if (!S.alive) return; const dt = Math.min(.04, (now - last) / 1000); last = now; S.raf = requestAnimationFrame(frame); if (!g) return;
+      if (S.on) {
+        if (S.cd > 0) { const b = Math.ceil(S.cd); S.cd -= dt; if (Math.ceil(S.cd) !== b) Sfx.play(S.cd <= 0 ? 'ding' : 'tick'); }
+        else for (const c of S.cars) {
+          if (c.done) continue; const a = ang(c);
+          if (c.ai) { const ta = a + .35, [tx, ty] = pt(ta); const want = Math.atan2(ty - c.y, tx - c.x); let d = want - c.h; d = Math.atan2(Math.sin(d), Math.cos(d)); c.h += d * Math.min(1, dt * 5); c.v += (0.16 * c.sk - c.v) * dt * 1.5; }
+          else { const k = S.keys, l = k.has('ArrowLeft') || k.has('KeyA'), r = k.has('ArrowRight') || k.has('KeyD'), up = k.has('ArrowUp') || k.has('KeyW'), dn = k.has('ArrowDown') || k.has('KeyS'); c.h += ((r ? 1 : 0) - (l ? 1 : 0)) * dt * 2.6; c.v += ((up ? .2 : 0) - (dn ? .25 : 0) - c.v * .9) * dt * 1.6; c.v = clamp(c.v, -.04, .19); }
+          const off = Math.abs(Math.hypot((c.x - .5) / RX, (c.y - .5) / RY) - 1) > TW / RX * 1.2; const vv = off ? c.v * .55 : c.v;
+          c.x += Math.cos(c.h) * vv * dt; c.y += Math.sin(c.h) * vv * dt; c.x = clamp(c.x, .03, .97); c.y = clamp(c.y, .05, .95);
+          const na = ang(c); let da = na - c.last; da = Math.atan2(Math.sin(da), Math.cos(da)); c.prog += da; c.last = na;
+          if (c.prog >= TAU * (c.lap + 1)) { c.lap++; if (!c.ai) { const lt = now - c.lapT; c.lapT = now; const best = Store.get('kart_best', 0); if (!best || lt < best) { Store.set('kart_best', Math.round(lt)); sB.set((lt / 1000).toFixed(2) + ' s', true); } Sfx.play('chip'); } if (c.lap >= 3) { c.done = now; S.fin.push(c); if (!c.ai) finish(); } }
+        }
+        const order = S.cars.slice().sort((a, b) => (b.done ? 1e9 - b.done : 0) - (a.done ? 1e9 - a.done : 0) || b.prog - a.prog); const me = S.cars[0];
+        sL.set(Math.min(3, me.lap + 1) + ' / 3'); sP.set((S.fin.includes(me) ? S.fin.indexOf(me) + 1 : order.indexOf(me) + 1) + 'º');
+      }
+      g.fillStyle = '#1f5a30'; g.fillRect(0, 0, W, H); g.strokeStyle = '#2a2830'; g.lineWidth = TW * 2 * Math.min(W, H) * 1.2; g.beginPath(); g.ellipse(W / 2, H / 2, RX * W, RY * H, 0, 0, TAU); g.stroke();
+      g.setLineDash([10, 10]); g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 2; g.beginPath(); g.ellipse(W / 2, H / 2, RX * W, RY * H, 0, 0, TAU); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#fff'; g.fillRect(W / 2 - 3, H / 2 - RY * H - TW * H, 6, TW * H * 2);
+      for (const c of S.cars) { g.save(); g.translate(c.x * W, c.y * H); g.rotate(c.h); g.fillStyle = c.col; g.fillRect(-11, -6, 22, 12); g.fillStyle = '#111'; g.fillRect(-2, -4, 7, 8); g.restore(); if (!c.ai) { g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(c.x * W, c.y * H, 16, 0, TAU); g.stroke(); } }
+      if (S.on && S.cd > 0) neonText(g, String(Math.ceil(S.cd)), W / 2, H / 2, Math.min(90, W * .15), '#fff', '#3df58a');
+      if (!S.on) neonText(g, 'KARTING NEÓN', W / 2, H / 2, Math.min(40, W * .07), '#fff', '#3df58a');
+    };
+    function finish() { setTimeout(() => { S.on = false; go.disabled = false; go.textContent = 'Otra carrera · 5 €'; const pos = S.fin.indexOf(S.cars[0]) + 1, pr = [0, 1500, 700, 300][pos] || 0; if (pr) { Wallet.pay(pr, 'karts'); UI.celebrate(pr, 500, cv, pos === 1 ? '¡1º EN KARTS!' : undefined); } else { Sfx.play('lose'); UI.toast('Has quedado ' + pos + 'º', ''); } Prog.addXp && Prog.addXp(5); }, 400); }
+    S.raf = requestAnimationFrame(frame);
+  },
+  onKey(e) { if (/Arrow|Key[WASD]/.test(e.code)) { e.preventDefault(); this.S.keys.add(e.code); clearTimeout(this.S['k' + e.code]); this.S['k' + e.code] = setTimeout(() => this.S.keys.delete(e.code), 160); } },
+  canClose() { if (this.S.on) { UI.toast('Termina la carrera antes de salir', 'bad'); return false; } return true; },
+  unmount() { this.S.alive = false; cancelAnimationFrame(this.S.raf); this.S.off(); },
+};
+
+/* Neon Snake (salón recreativo) */
+Games.snake = {
+  title: 'NEON SNAKE', sub: 'Salón recreativo · 1 € la partida', theme: 't-jetx',
+  rules: `<h3>Neon Snake</h3><ul><li>1 € la partida. Come las bolas de neón sin chocar contigo ni con las paredes.</li><li>Cada bola suma puntos y la serpiente acelera.</li><li>Premio: 10 céntimos por punto a partir de 10 puntos (máximo 10 €).</li></ul>`,
+  mount(body) {
+    const { stage, side } = split2(body); const cv = el('canvas', { class: 'gc' }); stage.append(cv);
+    const sP = statBox('Puntos', '0'), sR = statBox('Récord', String(Store.get('snake_best', 0))), go = el('button', { class: 'btn primary wide', text: 'Jugar · 1 €', onclick: () => start() }); side.append(go, sP.el, sR.el, el('p', { class: 'note', text: 'Flechas o WASD' }));
+    const S = this.S = { alive: true, on: false, body: [], dir: [1, 0], nd: [1, 0], food: null, pts: 0, acc: 0, step: .14 }; let W = 0, H = 0, g = null; const CW = 24, CH = 16;
+    S.off = observe(stage, () => { const r = stage.getBoundingClientRect(); W = Math.max(200, r.width); H = Math.max(160, r.height); cv.style.width = W + 'px'; cv.style.height = H + 'px'; g = fitCanvas(cv, W, H); });
+    const place = () => { do S.food = [Math.floor(RNG.float() * CW), Math.floor(RNG.float() * CH)]; while (S.body.some(b => b[0] === S.food[0] && b[1] === S.food[1])); };
+    function start() { if (S.on || !Wallet.bet(100, 'snake')) return; S.on = true; S.body = [[6, 8], [5, 8], [4, 8]]; S.dir = [1, 0]; S.nd = [1, 0]; S.pts = 0; S.step = .14; place(); go.disabled = true; sP.set('0'); }
+    function end() { S.on = false; go.disabled = false; go.textContent = 'Otra partida · 1 €'; Sfx.play('explode'); FX.shake(cv); if (S.pts > Store.get('snake_best', 0)) { Store.set('snake_best', S.pts); sR.set(String(S.pts), true); } const p = S.pts >= 10 ? Math.min(1000, S.pts * 10) : 0; if (p) { Wallet.pay(p, 'snake'); UI.celebrate(p, 100, cv); } else UI.toast(S.pts + ' puntos · llega a 10 para cobrar', ''); }
+    S.turn = d => { if (d[0] === -S.dir[0] && d[1] === -S.dir[1]) return; S.nd = d; };
+    let last = performance.now();
+    const frame = now => {
+      if (!S.alive) return; const dt = Math.min(.05, (now - last) / 1000); last = now; S.raf = requestAnimationFrame(frame); if (!g) return;
+      if (S.on) { S.acc += dt; while (S.acc >= S.step && S.on) { S.acc -= S.step; S.dir = S.nd; const h = [S.body[0][0] + S.dir[0], S.body[0][1] + S.dir[1]];
+        if (h[0] < 0 || h[1] < 0 || h[0] >= CW || h[1] >= CH || S.body.some(b => b[0] === h[0] && b[1] === h[1])) { end(); break; }
+        S.body.unshift(h); if (h[0] === S.food[0] && h[1] === S.food[1]) { S.pts++; sP.set(String(S.pts), true); Sfx.play('gem', S.pts); S.step = Math.max(.06, S.step * .965); place(); } else S.body.pop(); } }
+      const cs = Math.min(W / CW, H / CH), ox = (W - cs * CW) / 2, oy = (H - cs * CH) / 2;
+      g.fillStyle = '#05020c'; g.fillRect(0, 0, W, H); g.strokeStyle = '#b45cff'; g.lineWidth = 2; g.strokeRect(ox, oy, cs * CW, cs * CH);
+      if (S.food) { g.fillStyle = '#ff3d9a'; g.shadowColor = '#ff3d9a'; g.shadowBlur = 12; g.beginPath(); g.arc(ox + (S.food[0] + .5) * cs, oy + (S.food[1] + .5) * cs, cs * .38, 0, TAU); g.fill(); g.shadowBlur = 0; }
+      S.body.forEach((b, i) => { g.fillStyle = i ? `hsl(${170 + i * 3},100%,55%)` : '#fff'; g.fillRect(ox + b[0] * cs + 1, oy + b[1] * cs + 1, cs - 2, cs - 2); });
+      if (!S.on) neonText(g, S.pts ? S.pts + ' PUNTOS' : 'NEON SNAKE', W / 2, H / 2, Math.min(40, W * .07), '#fff', '#b45cff');
+    };
+    S.raf = requestAnimationFrame(frame);
+  },
+  onKey(e) { const d = { ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1], ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0] }[e.code]; if (d) { e.preventDefault(); this.S.turn(d); } },
+  canClose() { if (this.S.on) { UI.toast('Termina la partida antes de salir', 'bad'); return false; } return true; },
+  unmount() { this.S.alive = false; cancelAnimationFrame(this.S.raf); this.S.off(); },
+};
+
 /* ---- 99_main.js ---- */
 /* =====================================================================
    ARRANQUE
@@ -6790,7 +7551,7 @@ Games.lifeguard = {
 (async function boot() {
   const bar = $('#ldbar'), txt = $('#ldtxt');
   const say = (k, t) => { bar.style.width = Math.round(k * 100) + '%'; if (t) txt.textContent = t; };
-  Wallet.init(); UI.init(); Prog.load(); Prog.hook(); Net.use(Net.auto()).then(() => NetHud.draw());
+  Wallet.init(); UI.init(); Chat.init(); Board.initButtons(); Prog.load(); Prog.hook(); Net.use(Net.auto()).then(() => NetHud.draw());
   { const t = Prog.s.tour; if (t.day === dayNo() && t.joined && !t.done) Prog.tourFinish(0); }
   Prog.check(); Prog.render(); Phone.init(); $('#wallet').onclick = () => { if (!UI.panelGame && $('#modal').hidden) Hub.open('perfil'); };
   const glOk = (() => { try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl'))); } catch (e) { return false; } })();

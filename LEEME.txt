@@ -34,9 +34,26 @@ QUÉ SE COMPARTE ENTRE TODOS
   - Barra "EN DIRECTO" en las máquinas con lo que apuestan y ganan los demás.
   - Ranking (TOP) de jugadores reales: patrimonio, reputación, mayor premio y torneo.
   - Elecciones a alcalde cada 30 minutos en el Ayuntamiento (Distrito Sur).
-  Se guardan en data.json. En el plan gratis de Render ese archivo se borra cuando el
-  servidor se reinicia, pero cada jugador guarda una copia del ranking y se la devuelve
-  al servidor al conectarse, así que se recupera solo en cuanto alguien entra.
+  - Ruleta automática cada 15 s con las fichas de todos, pantallas de máquinas en directo,
+    máquinas ocupadas (una persona por máquina), chat, contactos, negocios con dueño único,
+    subastas, elecciones semanales con voto secreto, gobierno municipal, sugerencias y OVNI.
+
+CONTRASEÑA DE ADMINISTRACIÓN (/givemoney y /ufo)
+  La contraseña NO está en el código (el repositorio es público y cualquiera la vería).
+  En render.com → tu servicio → Environment → Add Environment Variable:
+       Key: ADMIN_PASS      Value: 3456767   (o la que quieras)
+  Guarda y Render se reinicia solo. En el chat del juego:
+       /givemoney NOMBRE CANTIDAD CONTRASEÑA     (el jugador tiene que estar conectado)
+       /ufo CONTRASEÑA                           (lanza el evento del OVNI)
+
+GUARDADO PERMANENTE (recomendado, gratis)
+  Render gratis borra los archivos al reiniciarse, así que elecciones, negocios, subastas,
+  sugerencias y ranking se perderían. Para guardarlos de verdad:
+  1. Crea una cuenta en upstash.com → Create Database (Redis, plan Free, región Europa).
+  2. En la base de datos, apartado "REST API", copia UPSTASH_REDIS_REST_URL y
+     UPSTASH_REDIS_REST_TOKEN.
+  3. En Render → Environment añade esas dos variables con sus valores. Listo.
+  Al arrancar, el registro de Render dirá "guardado en Upstash".
 
 AVISOS
   - Plan gratis: si nadie juega en 15 minutos el servidor se duerme; el primero que

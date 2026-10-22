@@ -23,7 +23,7 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
 const players = new Map(); // id -> { ws, state, lk, dirty, lkDirty, n, t0 }
 const clean = s => String(s || 'Jugador').replace(/[<>&"']/g, '').trim().slice(0, 16) || 'Jugador';
 const num = (v, lim = 1e6) => { v = +v; return Number.isFinite(v) ? Math.max(-lim, Math.min(lim, v)) : 0; };
-const SCENES = new Set(['city', 'avenida', 'casino', 'premier', 'vip', 'roof', 'burger', 'salera', 'sur', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8']);
+const SCENES = new Set(['city', 'avenida', 'casino', 'premier', 'vip', 'roof', 'burger', 'salera', 'sur', 'sotano', 'club', 'norte', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8']);
 
 wss.on('connection', ws => {
   let me = null;
@@ -35,7 +35,7 @@ wss.on('connection', ws => {
       const id = String(m.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 16) || 'p' + Math.random().toString(36).slice(2, 10);
       const old = players.get(id); if (old && old.ws !== ws) try { old.ws.close(); } catch (e) { }
       me = { id, ws, state: { id, name: clean(m.name), scene: 'city', x: 0, y: 0, z: 0, ry: 0, mv: 0, m: 0, car: null }, lk: '', dirty: true, lkDirty: true, n: 0, t0: Date.now() };
-      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, { t: 'ver', v: VER }); for (const k in RL) send(ws, rlMsg(k)); send(ws, occMsg()); return;
+      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, bizMsg()); send(ws, sugMsgFor(id)); send(ws, { t: 'news', list: DB.news }); if (DB.el.votes[id]) send(ws, { t: 'myvote', id: DB.el.votes[id] }); if (DB.refunds[id]) { give(me, DB.refunds[id], 'Devolución pendiente'); delete DB.refunds[id]; saveDb(); } if (UFO) send(ws, { t: 'ufo', at: Date.now() - UFO.at, x: UFO.x, z: UFO.z }); send(ws, { t: 'ver', v: VER }); for (const k in RL) send(ws, rlMsg(k)); send(ws, occMsg()); for (const [k, L] of LIVE) send(ws, Object.assign({ t: 'live', k }, L)); return;
     }
     if (!me) return;
     // límite de mensajes por segundo
@@ -55,10 +55,23 @@ wss.on('connection', ws => {
     else if (m.t === 'stats') stats(me, m);
     else if (m.t === 'rlbet') rlBet(me, m);
     else if (m.t === 'occ') occ(me, m);
+    else if (m.t === 'live') live(me, m);
     else if (m.t === 'seed') seed(m);
     else if (m.t === 'run') runFor(me, m);
     else if (m.t === 'vote') vote(me, m);
-    else if (m.t === 'mayorset' && DB.mayor && DB.mayor.id === me.id && BONUS.has(m.bonus)) { DB.mayor.bonus = m.bonus; dirtyCity(); }
+    else if (m.t === 'gov') govSet(me, m);
+    else if (m.t === 'fund') fund(me, m);
+    else if (m.t === 'tax') tax(me, m);
+    else if (m.t === 'aid') aid(me);
+    else if (m.t === 'bizbuy') bizBuy(me, m);
+    else if (m.t === 'bizsell') bizSell(me, m);
+    else if (m.t === 'bizclaim') bizClaim(me, m);
+    else if (m.t === 'bid') bid(me, m);
+    else if (m.t === 'bizspend') { const b = DB.biz[String(m.id)], c = Math.round(num(m.c, 5000)); const now = Date.now(); if (b && c > 0 && b.owner !== me.id && now - (me.lastSpend || 0) > 1500) { me.lastSpend = now; owe(b.owner, Math.round(c / 2), 'Clientes en tu negocio'); } }
+    else if (m.t === 'chat') chat(me, m);
+    else if (m.t === 'sugpost') sugPost(me, m);
+    else if (m.t === 'sugvote') sugVote(me, m);
+    else if (m.t === 'ufoclaim') ufoClaim(me, m);
     else if (m.t === 'jxbet') {
       const c = Math.round(num(m.c, 1e12));
       if (JX.ph !== 'wait' || c <= 0 || JX.bets.has(me.id)) { send(ws, { t: 'jxno', c }); return; }
@@ -80,85 +93,218 @@ function feed(me, m) {
   broadcast({ t: 'feed', pid: me.id, n: me.state.name, g: m.game, k: m.type, c });
 }
 
-// ---------- Datos que se guardan en disco: ranking y alcaldía ----------
+// ---------- Datos permanentes: ranking, alcaldía, gobierno, negocios, subastas, sugerencias y noticias ----------
+// Se guardan en data.json y, si existen las variables UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN,
+// también en una base de datos Redis gratuita (Upstash) para que no se pierdan al reiniciar Render.
 const DATA = process.env.DATA_FILE || path.join(__dirname, 'data.json');
-let DB = { top: {}, mayor: null, el: null };
+const UP = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN ? { url: process.env.UPSTASH_REDIS_REST_URL.replace(/\/$/, ''), tok: process.env.UPSTASH_REDIS_REST_TOKEN } : null;
+let DB = { top: {}, mayor: null, el: null, gov: null, biz: {}, auc: null, refunds: {}, sug: [], news: [], fin: {} };
 try { DB = Object.assign(DB, JSON.parse(fs.readFileSync(DATA, 'utf8'))); } catch (e) { }
 let dbDirty = false; const saveDb = () => { dbDirty = true; };
-setInterval(() => { if (!dbDirty) return; dbDirty = false; fs.writeFile(DATA, JSON.stringify(DB), () => { }); }, 10000);
+async function upCmd(args) { const r = await fetch(UP.url, { method: 'POST', headers: { Authorization: 'Bearer ' + UP.tok, 'Content-Type': 'application/json' }, body: JSON.stringify(args) }); return (await r.json()).result; }
+async function loadDb() { if (!UP) return; try { const v = await upCmd(['GET', 'neonroyale']); if (v) { DB = Object.assign(DB, JSON.parse(v)); console.log('Datos cargados de Upstash'); } } catch (e) { console.log('Upstash no disponible:', e.message); } }
+setInterval(() => { if (!dbDirty) return; dbDirty = false; const j = JSON.stringify(DB); fs.writeFile(DATA, j, () => { }); if (UP) upCmd(['SET', 'neonroyale', j]).catch(() => { dbDirty = true; }); }, UP ? 20000 : 10000);
+const news = (txt, k = 'evento') => { DB.news.unshift({ txt, k, at: Date.now() }); DB.news = DB.news.slice(0, 40); saveDb(); broadcast({ t: 'news', list: DB.news }); };
+const byName = n => { n = String(n || '').toLowerCase(); for (const p of players.values()) if (p.state.name.toLowerCase() === n) return p; return null; };
+const give = (p, c, why) => send(p.ws, { t: 'gift', c, why });
+function owe(id, c, why) { const p = players.get(id); if (p) give(p, c, why); else { DB.refunds[id] = (DB.refunds[id] || 0) + c; saveDb(); } }
 
 // Ranking: solo jugadores reales (cada uno envía sus números al conectarse y cada poco)
 const rec = (id, o) => { const r = DB.top[id] || (DB.top[id] = { id }); return Object.assign(r, o); };
 function stats(me, m) {
   const day = Math.floor(num(m.tday, 1e7));
-  rec(me.id, { n: me.state.name, net: Math.round(num(m.net, 1e15)), lvl: Math.round(num(m.lvl, 1e4)), best: Math.round(num(m.best, 1e15)), tour: Math.round(num(m.tour, 1e9)), tday: day, at: Date.now() });
+  rec(me.id, { n: me.state.name, net: Math.round(num(m.net, 1e15)), lvl: Math.round(num(m.lvl, 1e4)), best: Math.round(num(m.best, 1e15)), tour: Math.round(num(m.tour, 1e9)), tday: day, bizv: Math.round(num(m.bizv, 1e15)), homes: Math.round(num(m.homes, 100)), at: Date.now() });
   pruneTop(); saveDb(); dirtyTop();
 }
-// si el servidor se reinició y perdió el ranking, los jugadores le devuelven la última copia que vieron
 function seed(m) {
   if (!Array.isArray(m.list)) return; let n = 0;
-  for (const x of m.list.slice(0, 100)) { const id = String(x.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 16); if (!id || DB.top[id]) continue; rec(id, { n: clean(x.n), net: Math.round(num(x.net, 1e15)), lvl: Math.round(num(x.lvl, 1e4)), best: Math.round(num(x.best, 1e15)), tour: Math.round(num(x.tour, 1e9)), tday: Math.floor(num(x.tday, 1e7)), at: Math.round(num(x.at, 1e13)) }); n++; }
+  for (const x of m.list.slice(0, 100)) { const id = String(x.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 16); if (!id || DB.top[id]) continue; rec(id, { n: clean(x.n), net: Math.round(num(x.net, 1e15)), lvl: Math.round(num(x.lvl, 1e4)), best: Math.round(num(x.best, 1e15)), tour: Math.round(num(x.tour, 1e9)), tday: Math.floor(num(x.tday, 1e7)), bizv: Math.round(num(x.bizv, 1e15)), homes: Math.round(num(x.homes, 100)), at: Math.round(num(x.at, 1e13)) }); n++; }
   if (n) { pruneTop(); saveDb(); dirtyTop(); }
 }
 function pruneTop() { const L = Object.values(DB.top); if (L.length <= 300) return; L.sort((a, b) => b.net - a.net); for (const r of L.slice(300)) delete DB.top[r.id]; }
 function topMsg() { return { t: 'top', list: Object.values(DB.top) }; }
 let topD = false, lastTop = 0; const dirtyTop = () => { topD = true; };
 
-// Alcaldía: elecciones cada 30 minutos. Gana quien tenga más votos.
-const EL_MS = 30 * 60000, BONUS = new Set(['wage', 'biz', 'xp']);
-function newElection() { DB.el = { ends: Date.now() + EL_MS, cands: {}, votes: {} }; saveDb(); }
-if (!DB.el || !DB.el.ends) newElection();
+// ---------- Alcaldía: elecciones semanales (cierran el domingo a las 20:00, hora de Madrid en verano) ----------
+const BONUS = new Set(['wage', 'biz', 'xp']);
+const LIM = { tax: [0, 15], prize: [0, 5], aid: [0, 5000], salary: [0, 50000] }; // impuesto % sobre premios del casino, extra % pagado por el ayuntamiento, ayuda diaria y sueldo/hora del alcalde (céntimos)
+function nextSunday() { const d = new Date(); d.setUTCHours(18, 0, 0, 0); let add = (7 - d.getUTCDay()) % 7; if (add === 0 && d.getTime() <= Date.now()) add = 7; d.setUTCDate(d.getUTCDate() + add); return d.getTime(); }
+function newElection() { DB.el = { ends: nextSunday(), cands: {}, votes: {} }; saveDb(); }
+if (!DB.el || !DB.el.ends || DB.el.ends - Date.now() > 8 * 864e5) newElection();
+if (!DB.gov) DB.gov = { tax: 3, prize: 0, aid: 0, salary: 5000, treasury: 0, log: [], aidDay: {}, paidAt: Date.now() };
 function runFor(me, m) {
   const e = DB.el; if (Object.keys(e.cands).length >= 12 || e.cands[me.id]) return;
-  e.cands[me.id] = { id: me.id, n: me.state.name, slogan: clean(m.slogan).slice(0, 40) || 'Por una ciudad con más neón', bonus: BONUS.has(m.bonus) ? m.bonus : 'wage' }; dirtyCity();
+  e.cands[me.id] = { id: me.id, n: me.state.name, slogan: clean(m.slogan).slice(0, 40) || 'Por una ciudad con más neón', bonus: BONUS.has(m.bonus) ? m.bonus : 'wage', fund: 0 }; dirtyCity();
+  news('🗳️ ' + me.state.name + ' se presenta a las elecciones a alcalde', 'alcaldia');
 }
-function vote(me, m) { const e = DB.el, id = String(m.id || ''); if (!e.cands[id]) return; e.votes[me.id] = id; dirtyCity(); }
+// financiar la campaña: solo da visibilidad (carteles), nunca votos; máximo 1.000 € por candidato
+function fund(me, m) { const e = DB.el, c = e.cands[me.id], v = Math.round(num(m.c, 1e9)); if (!c || v <= 0) return; const ok = Math.min(v, 100000 - c.fund); if (ok <= 0) { give(me, v, 'Campaña: límite de 1.000 € alcanzado'); return; } c.fund += ok; if (ok < v) give(me, v - ok, 'Campaña: límite de 1.000 €'); dirtyCity(); }
+function vote(me, m) { const e = DB.el, id = String(m.id || ''); if (!e.cands[id]) return; e.votes[me.id] = id; dirtyCity(); send(me.ws, { t: 'myvote', id }); }
 function cityMsg() {
   const e = DB.el, v = {}; for (const k in e.votes) v[e.votes[k]] = (v[e.votes[k]] || 0) + 1;
-  return { t: 'city', mayor: DB.mayor, el: { ends: e.ends, left: e.ends - Date.now(), cands: Object.values(e.cands).map(c => Object.assign({ v: v[c.id] || 0 }, c)), voted: e.votes } };
+  const g = DB.gov;
+  return { t: 'city', mayor: DB.mayor, gov: { tax: g.tax, prize: g.prize, aid: g.aid, salary: g.salary, treasury: Math.round(g.treasury), log: g.log.slice(0, 12), lim: LIM }, el: { ends: e.ends, left: e.ends - Date.now(), cands: Object.values(e.cands).map(c => Object.assign({ v: v[c.id] || 0 }, c)), total: Object.keys(e.votes).length } };
+}
+function govSet(me, m) {
+  if (!DB.mayor || DB.mayor.id !== me.id) return; const g = DB.gov, ch = [];
+  for (const k of ['tax', 'prize', 'aid', 'salary']) if (m[k] != null) { const v = Math.round(Math.max(LIM[k][0], Math.min(LIM[k][1], num(m[k], 1e9)))); if (v !== g[k]) { ch.push(k); g[k] = v; } }
+  if (BONUS.has(m.bonus) && m.bonus !== DB.mayor.bonus) { DB.mayor.bonus = m.bonus; ch.push('bonus'); }
+  if (!ch.length) return;
+  const txt = { tax: 'impuesto sobre premios ' + g.tax + ' %', prize: 'extra en premios ' + g.prize + ' %', aid: 'ayuda diaria ' + (g.aid / 100).toFixed(2) + ' €', salary: 'sueldo del alcalde ' + (g.salary / 100).toFixed(2) + ' €/h', bonus: 'nueva ventaja de ciudad' };
+  const line = '👑 ' + me.state.name + ' cambia: ' + ch.map(k => txt[k]).join(', ');
+  g.log.unshift({ txt: line, at: Date.now() }); g.log = g.log.slice(0, 30); dirtyCity(); news(line, 'alcaldia');
+}
+// impuestos: los clientes declaran lo retenido de cada premio del casino; el extra lo paga el ayuntamiento si hay fondos
+function tax(me, m) { const c = Math.round(num(m.c, 1e9)); if (c > 0) { DB.gov.treasury += c; saveDb(); cityD = true; } const x = Math.round(num(m.x, 1e9)); if (x > 0) { DB.gov.treasury = Math.max(0, DB.gov.treasury - x); saveDb(); cityD = true; } }
+function aid(me) {
+  const g = DB.gov, day = Math.floor(Date.now() / 864e5); if (!g.aid) { send(me.ws, { t: 'aidno', why: 'El alcalde no ha aprobado ayudas' }); return; }
+  if ((g.aidDay[me.id] || 0) === day) { send(me.ws, { t: 'aidno', why: 'Ya has cobrado la ayuda de hoy' }); return; }
+  if (g.treasury < g.aid) { send(me.ws, { t: 'aidno', why: 'El ayuntamiento no tiene fondos' }); return; }
+  g.treasury -= g.aid; g.aidDay[me.id] = day; give(me, g.aid, 'Ayuda municipal'); dirtyCity();
 }
 let cityD = false; const dirtyCity = () => { cityD = true; saveDb(); };
+
+// ---------- Negocios: un solo dueño por negocio. Kiosco y Cafetería para el primero que los compre; el resto, en subasta diaria ----------
+const BIZ = { kiosk: 150000, cafe: 800000, phones: 2500000, club: 15000000, bowling: 9000000, gym: 6000000, wash: 4500000, beach: 2000000 };
+const FIRST = new Set(['kiosk', 'cafe']), AUC_MS = 24 * 3600e3;
+const bizMsg = () => ({ t: 'biz', own: DB.biz, auc: DB.auc && Object.assign({}, DB.auc, { left: DB.auc.ends - Date.now() }) });
+let bizD = false; const dirtyBiz = () => { bizD = true; saveDb(); };
+function bizBuy(me, m) {
+  const id = String(m.id || ''); if (!FIRST.has(id)) return send(me.ws, { t: 'bizno', id, c: Math.round(num(m.c, 1e12)), why: 'Este negocio solo se consigue en subasta' });
+  if (DB.biz[id]) return send(me.ws, { t: 'bizno', id, c: Math.round(num(m.c, 1e12)), why: 'Ya tiene dueño: ' + DB.biz[id].n });
+  if (Math.round(num(m.c, 1e12)) < BIZ[id]) return; DB.biz[id] = { owner: me.id, n: me.state.name, since: Date.now() }; dirtyBiz(); news('🏪 ' + me.state.name + ' compra ' + id, 'negocios');
+}
+function bizSell(me, m) { const id = String(m.id || ''), b = DB.biz[id]; if (!b || b.owner !== me.id) return; delete DB.biz[id]; dirtyBiz(); }
+function bizClaim(me, m) { // compras hechas antes de que existieran los dueños únicos
+  const id = String(m.id || ''); if (!(id in BIZ)) return; if (!DB.biz[id] && FIRST.has(id)) { DB.biz[id] = { owner: me.id, n: me.state.name, since: Date.now() }; dirtyBiz(); }
+  else if (!DB.biz[id] || DB.biz[id].owner !== me.id) send(me.ws, { t: 'bizlost', id });
+}
+function nextAuction() {
+  const free = Object.keys(BIZ).filter(id => !FIRST.has(id) && !DB.biz[id]); if (!free.length) { DB.auc = null; return; }
+  const last = DB.aucLast || ''; const id = free[(free.indexOf(last) + 1) % free.length] || free[0];
+  DB.aucLast = id; DB.auc = { id, min: BIZ[id], ends: Date.now() + AUC_MS, top: null, n: 0 }; dirtyBiz(); news('🔨 Nueva subasta: ' + id + ' · puja mínima ' + (BIZ[id] / 100).toLocaleString('es-ES') + ' €', 'subasta');
+}
+function bid(me, m) {
+  const a = DB.auc, c = Math.round(num(m.c, 1e13)); if (!a || String(m.id) !== a.id) return send(me.ws, { t: 'bidno', c, why: 'Esa subasta ya terminó' });
+  const need = a.top ? Math.ceil(a.top.c * 1.05) : a.min; if (c < need) return send(me.ws, { t: 'bidno', c, why: 'La puja mínima ahora es ' + (need / 100).toFixed(2) + ' €' });
+  if (a.top && a.top.id === me.id) { owe(me.id, a.top.c, 'Devolución de tu puja anterior'); } else if (a.top) owe(a.top.id, a.top.c, 'Te han superado en la subasta');
+  a.top = { id: me.id, n: me.state.name, c }; a.n++; if (a.ends - Date.now() < 120000) a.ends = Date.now() + 120000; dirtyBiz();
+}
+if (DB.auc === null || DB.auc === undefined) setTimeout(nextAuction, 1000);
+
+// ---------- Chat, privados y comandos ----------
+const ADMIN = process.env.ADMIN_PASS || ''; // la contraseña se pone en Render (Environment), nunca en el código
+function chat(me, m) {
+  let txt = String(m.txt || '').replace(/[<>]/g, '').trim().slice(0, 200); if (!txt) return;
+  const now = Date.now(); if (now - (me.lastChat || 0) < 700) return; me.lastChat = now;
+  if (txt[0] === '/') return command(me, txt);
+  if (m.to) { const p = players.get(String(m.to)); if (!p) return send(me.ws, { t: 'chat', sys: true, txt: 'Ese jugador no está conectado' }); const o = { t: 'chat', priv: true, pid: me.id, n: me.state.name, to: p.id, tn: p.state.name, txt, at: now }; send(p.ws, o); send(me.ws, o); return; }
+  broadcast({ t: 'chat', pid: me.id, n: me.state.name, txt, at: now });
+}
+function command(me, txt) {
+  const [cmd, ...a] = txt.split(/\s+/), sys = t => send(me.ws, { t: 'chat', sys: true, txt: t });
+  if (cmd === '/help' || cmd === '/ayuda') return sys('Comandos: /online · /w NOMBRE mensaje (privado) · /givemoney NOMBRE CANTIDAD CONTRASEÑA (administración)');
+  if (cmd === '/online') return sys('Conectados (' + players.size + '): ' + [...players.values()].map(p => p.state.name).join(', '));
+  if (cmd === '/w' || cmd === '/msg') { const p = byName(a[0]); if (!p) return sys('No hay nadie conectado con ese nombre'); return chat(me, { txt: a.slice(1).join(' '), to: p.id }); }
+  if (cmd === '/givemoney' || cmd === '/ufo') {
+    const now = Date.now(); me.adm = (me.adm || []).filter(t => now - t < 600000); if (me.adm.length >= 5) return sys('Demasiados intentos. Espera 10 minutos.');
+    const pass = a[a.length - 1];
+    if (!ADMIN) return sys('La administración no está activada en este servidor (falta ADMIN_PASS en Render)');
+    if (pass !== ADMIN) { me.adm.push(now); return sys('Contraseña incorrecta'); }
+    if (cmd === '/ufo') { ufoStart(); return sys('OVNI en camino'); }
+    const p = byName(a[0]), c = Math.round(num(String(a[1] || '').replace(',', '.'), 1e9) * 100);
+    if (!p || !(c > 0) || a.length < 3) return sys('Uso: /givemoney NOMBRE CANTIDAD CONTRASEÑA (el jugador tiene que estar conectado)');
+    give(p, c, 'Administración'); console.log('givemoney', me.state.name, '->', p.state.name, c); return sys('Has dado ' + (c / 100).toFixed(2) + ' € a ' + p.state.name);
+  }
+  sys('Comando desconocido. Escribe /help');
+}
+
+// ---------- Sugerencias (foro con votos únicos) ----------
+function sugMsgFor(id) { return { t: 'sug', list: DB.sug.slice(0, 60).map(s => ({ id: s.id, a: s.a, txt: s.txt, at: s.at, v: s.v.length, me: s.v.includes(id), mine: s.pid === id })) }; }
+function sugAll() { for (const p of players.values()) send(p.ws, sugMsgFor(p.id)); }
+function sugPost(me, m) { const txt = String(m.txt || '').replace(/[<>]/g, '').trim().slice(0, 280); if (txt.length < 5) return; const now = Date.now(); if (now - (me.lastSug || 0) < 120000) return send(me.ws, { t: 'chat', sys: true, txt: 'Espera 2 minutos entre sugerencias' }); me.lastSug = now; DB.sug.unshift({ id: now.toString(36) + Math.random().toString(36).slice(2, 5), a: me.state.name, pid: me.id, txt, at: now, v: [] }); DB.sug = DB.sug.slice(0, 200); saveDb(); sugAll(); }
+function sugVote(me, m) { const s = DB.sug.find(x => x.id === m.id); if (!s || s.v.includes(me.id)) return; s.v.push(me.id); DB.sug.sort((a, b) => b.v.length - a.v.length || b.at - a.at); saveDb(); sugAll(); }
+
+// ---------- Evento OVNI: cada 40-70 minutos (o con /ufo) aterriza en la ciudad ----------
+const UFO_SPOTS = [[0, 56], [0, 1], [-14, 116], [60, 2]];
+let UFO = null, ufoNext = Date.now() + (40 + Math.random() * 30) * 60000;
+function ufoStart() { const [x, z] = UFO_SPOTS[Math.floor(Math.random() * UFO_SPOTS.length)]; UFO = { at: Date.now(), x, z, claims: {} }; broadcast({ t: 'ufo', at: 0, x, z }); news('🛸 ¡Un OVNI ha aterrizado en la ciudad!', 'evento'); ufoNext = Date.now() + (40 + Math.random() * 30) * 60000; }
+function ufoClaim(me, m) { if (!UFO || Date.now() - UFO.at > 100000) return; const i = Math.floor(num(m.i, 10)); if (i < 0 || i > 5) return; const c = UFO.claims[me.id] || (UFO.claims[me.id] = []); if (c.includes(i)) return; c.push(i); give(me, 1000 + Math.floor(Math.random() * 1500), 'Contacto alienígena'); }
+
 setInterval(() => {
   const now = Date.now(), e = DB.el;
   if (now >= e.ends) {
     const v = {}; for (const k in e.votes) v[e.votes[k]] = (v[e.votes[k]] || 0) + 1;
-    const best = Object.values(e.cands).sort((a, b) => (v[b.id] || 0) - (v[a.id] || 0))[0];
-    if (best) { DB.mayor = { id: best.id, n: best.n, bonus: best.bonus, slogan: best.slogan, votes: v[best.id] || 0, since: now }; broadcast({ t: 'mayornew', n: best.n }); }
+    const best = Object.values(e.cands).sort((a, b) => (v[b.id] || 0) - (v[a.id] || 0) || b.fund - a.fund)[0];
+    if (best && (v[best.id] || 0) > 0) { DB.mayor = { id: best.id, n: best.n, bonus: best.bonus, slogan: best.slogan, votes: v[best.id] || 0, since: now }; broadcast({ t: 'mayornew', n: best.n }); news('👑 ' + best.n + ' gana las elecciones con ' + (v[best.id] || 0) + ' votos', 'alcaldia'); }
     newElection(); cityD = true;
   }
+  // sueldo del alcalde (sale del tesoro municipal), cada 10 minutos si está conectado
+  const g = DB.gov; if (now - g.paidAt >= 600000) { g.paidAt = now; const mp = DB.mayor && players.get(DB.mayor.id), pay = Math.min(Math.round(g.salary / 6), Math.floor(g.treasury)); if (mp && pay > 0) { g.treasury -= pay; give(mp, pay, 'Sueldo de alcalde'); cityD = true; } }
+  // subastas
+  if (DB.auc && now >= DB.auc.ends) { const a = DB.auc; if (a.top) { DB.biz[a.id] = { owner: a.top.id, n: a.top.n, since: now }; news('🔨 ' + a.top.n + ' gana la subasta de ' + a.id + ' por ' + (a.top.c / 100).toLocaleString('es-ES') + ' €', 'subasta'); const p = players.get(a.top.id); p && send(p.ws, { t: 'chat', sys: true, txt: '¡Has ganado la subasta! El negocio ya es tuyo.' }); } else news('🔨 La subasta de ' + a.id + ' terminó sin pujas', 'subasta'); nextAuction(); }
+  else if (!DB.auc && Math.random() < .002) nextAuction();
+  if (now >= ufoNext && players.size) ufoStart();
+  if (UFO && now - UFO.at > 100000) UFO = null;
   if (cityD) { cityD = false; broadcast(cityMsg()); }
+  if (bizD) { bizD = false; broadcast(bizMsg()); }
   if (topD && now - lastTop > 2000) { topD = false; lastTop = now; broadcast(topMsg()); }
 }, 1000);
 
-// ---------- Ruleta compartida: al apostar alguien empieza una cuenta atrás de 5 s, luego gira para todos ----------
-const RL = {}, RL_BET = 5000, RL_SPIN = 6600, RL_RES = 3400;
-const rlT = k => RL[k] || (RL[k] = { ph: 'idle', t0: Date.now(), n: null, bets: new Map(), hist: [] });
-function rlMsg(k) { const T = rlT(k); return { t: 'rl', k, ph: T.ph, el: Date.now() - T.t0, n: T.ph === 'spin' || T.ph === 'res' ? T.n : null, bets: [...T.bets.values()].map(b => ({ n: b.n, c: b.c })), hist: T.hist }; }
+// ---------- Ruleta compartida: gira sola cada 15 s para todos (apuestas abiertas 15 s, «no va más», giro y resultado) ----------
+const RL = {}, RL_BET = 15000, RL_CLOSE = 1200, RL_SPIN = 6600, RL_RES = 4200;
+const REDS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+const rlT = k => RL[k] || (RL[k] = { ph: 'bet', t0: Date.now(), n: null, bets: new Map(), hist: [], win: [] });
+function rlPay(key, n) { // mismo reparto que el juego: devuelve el multiplicador total (apuesta incluida)
+  const [t, a] = key.split(':');
+  if (t === 'n') return +a === n ? 36 : 0; if (n === 0) return 0;
+  if (t === 'col') return n % 3 === (+a % 3) ? 3 : 0; if (t === 'doz') return Math.ceil(n / 12) === +a ? 3 : 0;
+  return ({ low: n <= 18, high: n >= 19, even: n % 2 === 0, odd: n % 2 === 1, red: REDS.has(n), black: !REDS.has(n) })[t] ? 2 : 0;
+}
+const RL_KEY = /^(n:([0-9]|[12][0-9]|3[0-6])|col:[123]|doz:[123]|low|high|even|odd|red|black)$/;
+function rlMsg(k) { const T = rlT(k); return { t: 'rl', k, ph: T.ph, el: Date.now() - T.t0, n: T.ph === 'spin' || T.ph === 'res' ? T.n : null, bets: [...T.bets.entries()].map(([id, b]) => ({ id, n: b.n, c: b.c, cells: b.cells })), hist: T.hist, win: T.ph === 'res' ? T.win : [] }; }
 function rlBet(me, m) {
-  const k = String(m.k || 'main').replace(/[^a-z0-9]/gi, '').slice(0, 12) || 'main', T = rlT(k), c = Math.round(num(m.c, 1e12));
-  if (c <= 0) return;
-  if (T.ph !== 'idle' && T.ph !== 'bet') { send(me.ws, { t: 'rlno', k, c }); return; }
-  if (T.ph === 'idle') { T.ph = 'bet'; T.t0 = Date.now(); }
-  const b = T.bets.get(me.id) || { n: me.state.name, c: 0 }; b.c += c; T.bets.set(me.id, b); broadcast(rlMsg(k));
+  const k = String(m.k || 'main').replace(/[^a-z0-9]/gi, '').slice(0, 12) || 'main', T = rlT(k);
+  if (T.ph !== 'bet' || !Array.isArray(m.cells)) { send(me.ws, { t: 'rlno', k, c: Math.round(num(m.c, 1e12)) }); return; }
+  const b = T.bets.get(me.id) || { n: me.state.name, c: 0, cells: {} }; let add = 0;
+  for (const [key, v] of m.cells.slice(0, 60)) { const a = Math.round(num(v, 1e12)); if (!RL_KEY.test(key) || a <= 0) continue; b.cells[key] = (b.cells[key] || 0) + a; add += a; }
+  if (!add) return; b.c += add; T.bets.set(me.id, b); broadcast(rlMsg(k));
 }
 setInterval(() => {
   const now = Date.now();
   for (const k in RL) { const T = RL[k];
-    if (T.ph === 'bet' && now - T.t0 >= RL_BET) { T.ph = 'spin'; T.t0 = now; T.n = Math.floor(Math.random() * 37); broadcast(rlMsg(k)); }
-    else if (T.ph === 'spin' && now - T.t0 >= RL_SPIN) { T.ph = 'res'; T.t0 = now; T.hist.unshift(T.n); T.hist = T.hist.slice(0, 12); broadcast(rlMsg(k)); }
-    else if (T.ph === 'res' && now - T.t0 >= RL_RES) { T.ph = 'idle'; T.t0 = now; T.bets = new Map(); broadcast(rlMsg(k)); } }
+    if (T.ph === 'bet' && now - T.t0 >= RL_BET) { T.ph = 'closed'; T.t0 = now; broadcast(rlMsg(k)); }
+    else if (T.ph === 'closed' && now - T.t0 >= RL_CLOSE) { T.ph = 'spin'; T.t0 = now; T.n = Math.floor(Math.random() * 37); broadcast(rlMsg(k)); }
+    else if (T.ph === 'spin' && now - T.t0 >= RL_SPIN) {
+      T.ph = 'res'; T.t0 = now; T.hist.unshift(T.n); T.hist = T.hist.slice(0, 12);
+      T.win = []; for (const b of T.bets.values()) { let w = 0; for (const key in b.cells) w += b.cells[key] * rlPay(key, T.n); if (w > 0) T.win.push({ n: b.n, w }); }
+      T.win.sort((a, b) => b.w - a.w); broadcast(rlMsg(k));
+    }
+    else if (T.ph === 'res' && now - T.t0 >= RL_RES) { T.ph = 'bet'; T.t0 = now; T.bets = new Map(); T.win = []; broadcast(rlMsg(k)); } }
 }, 100);
+rlT('main');
+
+// ---------- Pantallas en directo: cada máquina muestra la partida de quien la está usando ----------
+const LIVE = new Map(); // máquina -> { g, n, d }
+function live(me, m) {
+  const k = String(m.k || '').slice(0, 40), o = OCC.get(k); if (!k || !o || o.id !== me.id) return;
+  const now = Date.now(); if (now - (me.lt || 0) < 200) return; me.lt = now;
+  let d = null; try { d = m.d && JSON.stringify(m.d).length < 900 ? m.d : null; } catch (e) { }
+  const g = String(m.g || '').replace(/[^a-z]/g, '').slice(0, 12); LIVE.set(k, { g, n: me.state.name, d });
+  broadcast({ t: 'live', k, g, n: me.state.name, d });
+}
+const liveDrop = k => { if (LIVE.delete(k)) broadcast({ t: 'live', k, d: null }); };
 
 // ---------- Máquinas: solo puede usarlas un jugador a la vez, como en un casino de verdad ----------
 const OCC = new Map(); // máquina -> { id, n }
 const occMsg = () => ({ t: 'occ', list: [...OCC.entries()].map(([k, o]) => [k, o.id, o.n]) });
 function occ(me, m) {
   const k = String(m.k || '').slice(0, 40); if (!k) return;
-  if (m.on) { const o = OCC.get(k); if (o && o.id !== me.id && players.has(o.id)) { send(me.ws, { t: 'occno', k, n: o.n }); return; } for (const [kk, oo] of OCC) if (oo.id === me.id) OCC.delete(kk); OCC.set(k, { id: me.id, n: me.state.name }); }
-  else { const o = OCC.get(k); if (o && o.id === me.id) OCC.delete(k); }
+  if (m.on) { const o = OCC.get(k); if (o && o.id !== me.id && players.has(o.id)) { send(me.ws, { t: 'occno', k, n: o.n }); return; } for (const [kk, oo] of OCC) if (oo.id === me.id) { OCC.delete(kk); liveDrop(kk); } OCC.set(k, { id: me.id, n: me.state.name }); }
+  else { const o = OCC.get(k); if (o && o.id === me.id) { OCC.delete(k); liveDrop(k); } }
   broadcast(occMsg());
 }
-function occFree(id) { let ch = false; for (const [k, o] of OCC) if (o.id === id) { OCC.delete(k); ch = true; } if (ch) broadcast(occMsg()); }
+function occFree(id) { let ch = false; for (const [k, o] of OCC) if (o.id === id) { OCC.delete(k); liveDrop(k); ch = true; } if (ch) broadcast(occMsg()); }
 
 // JetX compartida: una sola ronda para todos, la decide el servidor
 const JX_WAIT = 6000, JX_PAUSE = 3000, JX = { ph: 'wait', t0: Date.now(), r: 0, crash: 2, bets: new Map(), hist: [], bd: false, lastB: 0 };
@@ -194,4 +340,4 @@ setInterval(() => {
 // conexiones muertas
 setInterval(() => { for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; try { ws.ping(); } catch (e) { } } }, 15000);
 
-server.listen(PORT, () => console.log('Neon Royale escuchando en el puerto ' + PORT));
+loadDb().then(() => server.listen(PORT, () => console.log('Neon Royale escuchando en el puerto ' + PORT + (UP ? ' · guardado en Upstash' : ' · guardado en data.json'))));

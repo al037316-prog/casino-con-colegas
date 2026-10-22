@@ -35,7 +35,7 @@ wss.on('connection', ws => {
       const id = String(m.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 16) || 'p' + Math.random().toString(36).slice(2, 10);
       const old = players.get(id); if (old && old.ws !== ws) try { old.ws.close(); } catch (e) { }
       me = { id, ws, state: { id, name: clean(m.name), scene: 'city', x: 0, y: 0, z: 0, ry: 0, mv: 0, m: 0, car: null }, lk: '', dirty: true, lkDirty: true, n: 0, t0: Date.now() };
-      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, { t: 'ver', v: VER }); return;
+      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, { t: 'ver', v: VER }); for (const k in RL) send(ws, rlMsg(k)); send(ws, occMsg()); return;
     }
     if (!me) return;
     // límite de mensajes por segundo
@@ -53,6 +53,8 @@ wss.on('connection', ws => {
     else if (m.t === 'sync') { sendSnap(ws); jxTo(ws); }
     else if (m.t === 'tx') feed(me, m);
     else if (m.t === 'stats') stats(me, m);
+    else if (m.t === 'rlbet') rlBet(me, m);
+    else if (m.t === 'occ') occ(me, m);
     else if (m.t === 'seed') seed(m);
     else if (m.t === 'run') runFor(me, m);
     else if (m.t === 'vote') vote(me, m);
@@ -64,7 +66,7 @@ wss.on('connection', ws => {
     } else if (m.t === 'jxcancel') { if (JX.ph === 'wait' && JX.bets.delete(me.id)) JX.bd = true; }
     else if (m.t === 'jxcash') { const b = JX.bets.get(me.id); if (JX.ph === 'fly' && b && !b.x) { const x = Math.floor(jxM(Date.now()) * 100) / 100; if (x < JX.crash) jxPay(b, x); } }
   });
-  ws.on('close', () => { if (me && players.get(me.id) === me) { players.delete(me.id); broadcast({ t: 'leave', id: me.id }); broadcastCount(); } });
+  ws.on('close', () => { if (me && players.get(me.id) === me) { occFree(me.id); players.delete(me.id); broadcast({ t: 'leave', id: me.id }); broadcastCount(); } });
 });
 
 function send(ws, o) { try { if (ws.readyState === 1) ws.send(JSON.stringify(o)); } catch (e) { } }
@@ -127,6 +129,36 @@ setInterval(() => {
   if (cityD) { cityD = false; broadcast(cityMsg()); }
   if (topD && now - lastTop > 2000) { topD = false; lastTop = now; broadcast(topMsg()); }
 }, 1000);
+
+// ---------- Ruleta compartida: al apostar alguien empieza una cuenta atrás de 5 s, luego gira para todos ----------
+const RL = {}, RL_BET = 5000, RL_SPIN = 6600, RL_RES = 3400;
+const rlT = k => RL[k] || (RL[k] = { ph: 'idle', t0: Date.now(), n: null, bets: new Map(), hist: [] });
+function rlMsg(k) { const T = rlT(k); return { t: 'rl', k, ph: T.ph, el: Date.now() - T.t0, n: T.ph === 'spin' || T.ph === 'res' ? T.n : null, bets: [...T.bets.values()].map(b => ({ n: b.n, c: b.c })), hist: T.hist }; }
+function rlBet(me, m) {
+  const k = String(m.k || 'main').replace(/[^a-z0-9]/gi, '').slice(0, 12) || 'main', T = rlT(k), c = Math.round(num(m.c, 1e12));
+  if (c <= 0) return;
+  if (T.ph !== 'idle' && T.ph !== 'bet') { send(me.ws, { t: 'rlno', k, c }); return; }
+  if (T.ph === 'idle') { T.ph = 'bet'; T.t0 = Date.now(); }
+  const b = T.bets.get(me.id) || { n: me.state.name, c: 0 }; b.c += c; T.bets.set(me.id, b); broadcast(rlMsg(k));
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const k in RL) { const T = RL[k];
+    if (T.ph === 'bet' && now - T.t0 >= RL_BET) { T.ph = 'spin'; T.t0 = now; T.n = Math.floor(Math.random() * 37); broadcast(rlMsg(k)); }
+    else if (T.ph === 'spin' && now - T.t0 >= RL_SPIN) { T.ph = 'res'; T.t0 = now; T.hist.unshift(T.n); T.hist = T.hist.slice(0, 12); broadcast(rlMsg(k)); }
+    else if (T.ph === 'res' && now - T.t0 >= RL_RES) { T.ph = 'idle'; T.t0 = now; T.bets = new Map(); broadcast(rlMsg(k)); } }
+}, 100);
+
+// ---------- Máquinas: solo puede usarlas un jugador a la vez, como en un casino de verdad ----------
+const OCC = new Map(); // máquina -> { id, n }
+const occMsg = () => ({ t: 'occ', list: [...OCC.entries()].map(([k, o]) => [k, o.id, o.n]) });
+function occ(me, m) {
+  const k = String(m.k || '').slice(0, 40); if (!k) return;
+  if (m.on) { const o = OCC.get(k); if (o && o.id !== me.id && players.has(o.id)) { send(me.ws, { t: 'occno', k, n: o.n }); return; } for (const [kk, oo] of OCC) if (oo.id === me.id) OCC.delete(kk); OCC.set(k, { id: me.id, n: me.state.name }); }
+  else { const o = OCC.get(k); if (o && o.id === me.id) OCC.delete(k); }
+  broadcast(occMsg());
+}
+function occFree(id) { let ch = false; for (const [k, o] of OCC) if (o.id === id) { OCC.delete(k); ch = true; } if (ch) broadcast(occMsg()); }
 
 // JetX compartida: una sola ronda para todos, la decide el servidor
 const JX_WAIT = 6000, JX_PAUSE = 3000, JX = { ph: 'wait', t0: Date.now(), r: 0, crash: 2, bets: new Map(), hist: [], bd: false, lastB: 0 };

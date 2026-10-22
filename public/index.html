@@ -104,6 +104,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .gp-head{display:flex;align-items:center;gap:12px;padding:12px 14px 12px 20px;border-bottom:1px solid rgba(255,255,255,.07);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 16%,transparent),transparent 60%);}
 .hm-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;background:rgba(255,255,255,.05);margin:4px 0}
 .hm-act{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 6px}.hm-list{max-height:52vh;overflow:auto}
+#job{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:30;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px 12px;max-width:min(680px,94vw);padding:8px 14px;border-radius:14px;background:rgba(14,10,30,.88);border:1px solid rgba(61,245,138,.5);box-shadow:0 0 18px rgba(61,245,138,.25);font-size:14px;color:#e8e2ff}
+#job b{color:#9dffc4}#job .late{color:#ff6b7d;font-weight:800}
 .gp-feed{display:flex;gap:6px;align-items:center;padding:5px 12px;overflow:hidden;white-space:nowrap;background:rgba(0,0,0,.35);border-bottom:1px solid rgba(255,255,255,.06);font-size:12.5px;font-weight:600;min-height:28px}
 .gp-feed .lv{color:#ff4d6d;font-weight:800;letter-spacing:.5px;flex:none}
 .gp-feed .fi{flex:none;padding:2px 9px;border-radius:99px;background:rgba(255,255,255,.07);color:#cfc8e8}
@@ -549,11 +551,11 @@ const Bus = {
 };
 
 /* ---------- Ajustes ---------- */
-const Settings = Object.assign({ quality: 'auto', sound: true, music: true, volume: 0.7, name: 'Jugador', fps: false, weather: true, view: 1, run: false }, Store.get('settings', {}));
+const Settings = Object.assign({ quality: 'auto', sound: true, music: true, volume: 0.7, name: 'Jugador', fps: false, weather: true, view: 1, run: false, turbo: false }, Store.get('settings', {}));
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 /** Multiplicador de distancia de visión en exteriores (Ajustes) */
 const viewK = sc => (sc && (sc.ext || sc.outdoor)) ? [.75, 1.25, 1.9][Settings.view ?? 1] : 1;
-Settings.save = function () { const o = {}; for (const k of ['quality', 'sound', 'music', 'volume', 'name', 'fps', 'weather', 'view', 'run']) o[k] = this[k]; Store.set('settings', o); };
+Settings.save = function () { const o = {}; for (const k of ['quality', 'sound', 'music', 'volume', 'name', 'fps', 'weather', 'view', 'run', 'turbo']) o[k] = this[k]; Store.set('settings', o); };
 /** Nivel de calidad efectivo: 0 bajo, 1 medio, 2 alto */
 function detectQuality() {
   if (Settings.quality === 'low') return 0;
@@ -909,7 +911,10 @@ const UI = {
   /* ---- Panel de juego ---- */
   open(gameId, opts = {}) {
     const g = Games[gameId]; if (!g) return;
+    const mk = this.machine; // máquina concreta del mundo (si se abrió desde una)
+    if (mk && Net.mode === 'online' && !SHARED_GAMES.has(gameId)) { const o = Occ.who(mk); if (o) { this.toast('Ocupada: está jugando ' + o.n + '. Busca otra máquina libre.', 'bad'); Sfx.play('error'); return; } }
     if (this.panelGame) this.close(true);
+    if (mk && Net.mode === 'online' && !SHARED_GAMES.has(gameId)) { Occ.claim(mk); this.panelMachine = mk; }
     if (typeof Phone !== 'undefined' && Phone.isOpen) Phone.toggle(false);
     Sfx.init();
     const root = $('#panel'); root.innerHTML = '';
@@ -932,6 +937,7 @@ const UI = {
     const g = this.panelGame; if (!g) return;
     if (!force && g.canClose && !g.canClose()) return;
     g.unmount && g.unmount();
+    if (this.panelMachine) { Occ.release(this.panelMachine); this.panelMachine = null; }
     this.panelGame = null; this.panelId = ''; $('#panel').hidden = true; $('#panel').innerHTML = '';
     World && World.setInputBlocked(false);
   },
@@ -1264,15 +1270,17 @@ class Reels {
     this.draw(performance.now());
   }
   destroy() { this.alive = false; cancelAnimationFrame(this.raf); }
+  /** Parar ya: los rodillos que aún giran se detienen en un instante (pulsar Girar otra vez) */
+  slam() { if (!this.reels) return; const now = performance.now(); this.reels.forEach((R, c) => { if (R.done) return; const k = clamp((now - R.t0) / R.dur, 0, 1); if (k < .8) { R.dur = 160 + c * 45; R.t0 = now - R.dur * .6; R.start = R.pos; } }); }
   spin(final, { durs, extra = [], onStop } = {}) {
-    this.hl = null; this.lines = [];
+    this.hl = null; this.lines = []; const TF = Settings.turbo ? .38 : 1;
     return new Promise(res => {
       const now = performance.now();
       this.reels = final.map((col, c) => {
         const n = 12 + c * 4 + Math.round((extra[c] || 0) * 10);
         const rand = []; for (let i = 0; i < n; i++) rand.push(this.filler());
         const tape = [this.filler(), ...col, ...rand, ...this.grid[c]];
-        return { tape, start: tape.length - this.rows, end: 1, t0: now, dur: (durs ? durs[c] : 900 + c * 260) + (extra[c] || 0) * 1000, pos: tape.length - this.rows, last: tape.length - this.rows, done: false };
+        return { tape, start: tape.length - this.rows, end: 1, t0: now, dur: ((durs ? durs[c] : 900 + c * 260) + (extra[c] || 0) * 1000) * TF, pos: tape.length - this.rows, last: tape.length - this.rows, done: false };
       });
       const tick = t => {
         if (!this.alive) return;
@@ -1697,7 +1705,7 @@ const World = (() => {
   function showHint(html, ms = 12000) { const h = $('#hint'); h.innerHTML = html; h.hidden = false; h.style.opacity = 1; clearTimeout(hintTimer); hintTimer = setTimeout(hideHint, ms); }
   function hideHint() { const h = $('#hint'); if (h.hidden) return; h.style.opacity = 0; clearTimeout(hintTimer); hintTimer = setTimeout(() => h.hidden = true, 600); }
   function setInputBlocked(b) { blocked = b; keys.clear(); if (b) { $('#prompt').hidden = true; moveTarget = null; } }
-  function doInteract(it) { Sfx.init(); moveTarget = null; pendingInteract = null; $('#prompt').hidden = true; it.fn(); }
+  function doInteract(it) { Sfx.init(); moveTarget = null; pendingInteract = null; $('#prompt').hidden = true; UI.machine = cur.id + ':' + Math.round(it.x) + ':' + Math.round(it.z); try { it.fn(); } finally { UI.machine = null; } }
 
   /* ---------- Mundo abierto: áreas colocadas en su sitio real (sin teletransportes) ----------
      Cada escena se construyó en sus propias coordenadas; aquí se coloca en el mundo con un
@@ -3343,8 +3351,8 @@ Games.roulette = {
     <li>Atajo: <b>Espacio</b> gira la ruleta.</li></ul>`,
   CHIPS: [10, 50, 100, 500, 2500, 10000],
   mount(body, o) {
-    o = o || {}; const K = o.k || '', CH = o.chips || this.CHIPS;
-    const S = this.S = { bets: new Map(), stack: [], last: Store.get('rl_last' + K, []), chip: o.chips ? o.chips[1] : Store.get('rl_chip', 100), spinning: false, rot: 0, ball: null, raf: 0, alive: true, hist: Store.get('rl_hist' + K, []) };
+    o = o || {}; const K = o.k || '', CH = o.chips || this.CHIPS, SH = Net.mode === 'online', TK = K || 'main';
+    const S = this.S = { SH, TK, mine: new Map(), bets: new Map(), stack: [], last: Store.get('rl_last' + K, []), chip: o.chips ? o.chips[1] : Store.get('rl_chip', 100), spinning: false, rot: 0, ball: null, raf: 0, alive: true, hist: Store.get('rl_hist' + K, []) };
     const { stage, side } = split2(body);
     const wrap = el('div', { class: 'rl-wrap' }); stage.append(wrap);
     const cv = el('canvas', { 'aria-label': 'Ruleta' }); const big = el('div', { class: 'big', text: '–' });
@@ -3364,28 +3372,35 @@ Games.roulette = {
     function syncChips() { chipBtns.forEach(b => b.classList.toggle('on', +b.dataset.v === S.chip)); }
     syncChips();
     const sTot = statBox('Apuesta total', fmt(0)), sWin = statBox('Último premio');
-    const spinB = el('button', { class: 'btn primary wide', text: 'Girar', onclick: () => spin() });
+    const spinB = el('button', { class: 'btn primary wide', text: SH ? 'Apostar' : 'Girar', onclick: () => spin() });
+    const table = el('div', { class: 'jx-live' });
     const undoB = el('button', { class: 'btn sm', text: 'Deshacer', onclick: () => { const k = S.stack.pop(); if (k) { const [key, v] = k; const nv = (S.bets.get(key) || 0) - v; nv > 0 ? S.bets.set(key, nv) : S.bets.delete(key); render(); } } });
     const clrB = el('button', { class: 'btn sm', text: 'Borrar', onclick: () => { S.bets.clear(); S.stack = []; render(); } });
     const repB = el('button', { class: 'btn sm', text: 'Repetir', onclick: () => { if (!S.last.length) return; const tot = S.last.reduce((a, b) => a + b[1], 0); if (tot > Wallet.cents) { UI.toast('No tienes saldo para repetir esa apuesta', 'bad'); return; } S.bets = new Map(S.last); S.stack = S.last.map(x => x.slice()); render(); Sfx.play('chip'); } });
     const dblB = el('button', { class: 'btn sm', text: '×2', onclick: () => { const t = total(); if (!t) return; if (t * 2 > Wallet.cents) { UI.toast('No tienes saldo para doblar', 'bad'); return; } for (const [k, v] of S.bets) { S.bets.set(k, v * 2); S.stack.push([k, v]); } render(); Sfx.play('chip'); } });
     side.append(el('span', { class: 'lbl', text: 'Ficha' }), chips, sTot.el, spinB, el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:6px' }, undoB, clrB, repB, dblB), sWin.el,
-      el('p', { style: 'margin:0;font-size:13px;color:var(--muted)', text: 'Clic para poner ficha · clic derecho para quitarla' }));
+      el('p', { style: 'margin:0;font-size:13px;color:var(--muted)', text: SH ? 'Mesa compartida: cuando alguien apuesta hay 5 s para apostar y luego gira para todos' : 'Clic para poner ficha · clic derecho para quitarla' }));
+    if (SH) side.append(table);
+    const RT = () => RLN[TK] || { ph: 'idle', bets: [], hist: [] };
+    function drawTable() { const T = RT(); table.innerHTML = ''; table.append(el('span', { class: 'lbl', text: 'En la mesa (' + T.bets.length + ')' })); if (!T.bets.length) table.append(el('span', { style: 'color:var(--muted)', text: 'Nadie ha apostado en esta ronda' })); for (const b of T.bets.slice().sort((a, b) => b.c - a.c)) table.append(el('div', { class: 'row' }, el('span', { text: b.n }), el('span', { class: 'num', text: fmt(b.c) }))); }
     const total = () => { let t = 0; for (const v of S.bets.values()) t += v; return t; };
+    const mineT = () => { let t = 0; for (const v of S.mine.values()) t += v; return t; };
+    const locked = () => S.spinning || (SH && (RT().ph === 'spin' || RT().ph === 'res'));
     function chipFor(v) { let c = 10; for (const x of this_.CHIPS) if (x <= v) c = x; return c; }
     const this_ = this;
     const short = v => v >= 100000 ? Math.round(v / 100000) + 'k' : v >= 100 ? String(Math.round(v / 10) / 10).replace('.', ',') : '0,' + String(v).padStart(2, '0');
     function render() {
-      for (const [k, c] of cells) { const old = c.querySelector('.chip'); const v = S.bets.get(k); if (!v) { old && old.remove(); continue; } if (old) { old.textContent = short(v); old.className = 'chip c' + chipFor(v); } else c.append(el('span', { class: 'chip c' + chipFor(v), text: short(v) })); }
-      sTot.set(fmt(total())); spinB.disabled = S.spinning || !total();
+      for (const [k, c] of cells) { const old = c.querySelector('.chip'); const v = (S.bets.get(k) || 0) + (S.mine.get(k) || 0); if (!v) { old && old.remove(); continue; } if (old) { old.textContent = short(v); old.className = 'chip c' + chipFor(v); } else c.append(el('span', { class: 'chip c' + chipFor(v), text: short(v) })); }
+      sTot.set(fmt(total() + mineT())); spinB.disabled = locked() || !total();
+      if (SH) spinB.textContent = total() ? 'Apostar ' + fmt(total()) : mineT() ? 'Apuesta hecha · añade más' : 'Pon fichas y apuesta';
       [undoB, clrB].forEach(b => b.disabled = S.spinning || !total()); repB.disabled = S.spinning || !S.last.length; dblB.disabled = S.spinning || !total();
     }
     function place(key) {
-      if (S.spinning) return;
+      if (locked()) { if (SH) UI.toast('La ruleta está girando: espera a la siguiente ronda', ''); return; }
       if (total() + S.chip > Wallet.cents) { UI.toast('Saldo insuficiente para esa ficha', 'bad'); Sfx.play('error'); return; }
       S.bets.set(key, (S.bets.get(key) || 0) + S.chip); S.stack.push([key, S.chip]); Sfx.play('chip'); render();
     }
-    function remove(key) { if (S.spinning || !S.bets.has(key)) return; S.bets.delete(key); S.stack = S.stack.filter(x => x[0] !== key); Sfx.play('chip'); render(); }
+    function remove(key) { if (locked() || !S.bets.has(key)) return; S.bets.delete(key); S.stack = S.stack.filter(x => x[0] !== key); Sfx.play('chip'); render(); }
     function wins(key, n) {
       const [t, a] = key.split(':');
       if (t === 'n') return +a === n ? 36 : 0;
@@ -3416,11 +3431,20 @@ Games.roulette = {
     function showHist() { histEl.innerHTML = ''; S.hist.slice(0, 10).forEach(n => histEl.append(el('span', { class: 'pill rnum-' + numCls(n), text: String(n), style: 'min-width:26px;text-align:center' }))); }
     showHist();
     function spin() {
-      const tot = total(); if (S.spinning || !tot) return;
+      const tot = total(); if (locked() || !tot) return;
       if (!Wallet.bet(tot, 'roulette')) return;
-      S.spinning = true; S.last = [...S.bets]; Store.set('rl_last' + K, S.last); render();
+      if (SH) { // mesa compartida: la apuesta queda en la mesa y el servidor hace girar la ruleta
+        for (const [k, v] of S.bets) S.mine.set(k, (S.mine.get(k) || 0) + v);
+        S.bets.clear(); S.stack = []; S.last = [...S.mine]; Store.set('rl_last' + K, S.last);
+        Net.transport.send({ t: 'rlbet', k: TK, c: tot }); Sfx.play('chip'); render(); return;
+      }
+      S.last = [...S.bets]; Store.set('rl_last' + K, S.last);
+      anim(WHEEL[RNG.int(37)]);
+    }
+    function anim(n) {
+      S.spinning = true; render();
       $$('.cell.win', board).forEach(c => c.classList.remove('win'));
-      const n = WHEEL[RNG.int(37)], idx = WHEEL.indexOf(n), pa = idx * TAU / 37 - Math.PI / 2;
+      const idx = WHEEL.indexOf(n), pa = idx * TAU / 37 - Math.PI / 2;
       const D = 6.2, w0 = S.rot, W = TAU * (2.2 + RNG.float()), wEnd = w0 + W, b0 = -Math.PI / 2 + RNG.float() * TAU;
       const KT = Math.ceil((5 * TAU - (b0 - wEnd - pa)) / TAU); const B = b0 - wEnd - pa + KT * TAU;
       big.textContent = '…'; big.className = 'big'; Sfx.play('spin'); setTimeout(() => Sfx.play('spin'), 500);
@@ -3444,19 +3468,32 @@ Games.roulette = {
       big.textContent = n; big.className = 'big rnum-' + numCls(n);
       S.hist.unshift(n); S.hist = S.hist.slice(0, 12); Store.set('rl_hist' + K, S.hist); showHist();
       const wc = cells.get('n:' + n); wc && wc.classList.add('win');
-      let ret = 0; const tot = total();
-      for (const [k, v] of S.bets) { const m = wins(k, n); if (m) { ret += v * m; const c = cells.get(k); c && c.classList.add('win'); } }
+      const B = SH ? S.mine : S.bets; let ret = 0, tot = 0; for (const v of B.values()) tot += v;
+      for (const [k, v] of B) { const m = wins(k, n); if (m) { ret += v * m; const c = cells.get(k); c && c.classList.add('win'); } }
       if (ret > 0) { Wallet.pay(ret, 'roulette'); sWin.set(fmt(ret), true); UI.celebrate(ret, tot, big); }
-      else { sWin.set(fmt(0)); Sfx.play('lose'); }
-      setTimeout(() => { if (!S.alive) return; S.bets.clear(); S.stack = []; S.spinning = false; render(); }, 1400);
+      else if (tot) { sWin.set(fmt(0)); Sfx.play('lose'); }
+      setTimeout(() => { if (!S.alive) return; if (SH) S.mine.clear(); else { S.bets.clear(); S.stack = []; } S.spinning = false; render(); }, 1400);
     }
     S.spin = spin;
     S.off = observe(stage, resize);
+    if (SH) {
+      if (RT().hist.length) { S.hist = RT().hist.slice(); showHist(); }
+      drawTable();
+      S.cb = (k, m) => {
+        if (k !== TK || !S.alive) return;
+        drawTable(); render();
+        if (m.ph === 'spin' && !S.spinning) { S.bets.clear(); S.stack = []; anim(m.n); }
+        if (m.ph === 'bet' && !S.spinning) { big.className = 'big'; }
+      };
+      RLN.cbs.add(S.cb);
+      S.cd = setInterval(() => { if (S.spinning) return; const T = RT(); if (T.ph === 'bet') { big.textContent = Math.max(0, (5000 - (performance.now() - T.t0)) / 1000).toFixed(1).replace('.', ','); big.className = 'big'; } }, 100);
+      S.rlno = c => { for (const [k, v] of S.mine) S.mine.delete(k); Wallet.refund(c, 'roulette'); UI.toast('La ruleta ya había empezado a girar: te devolvemos la apuesta', ''); render(); };
+    }
     render();
   },
   onKey(e) { if (e.code === 'Space') this.S.spin(); },
-  canClose() { if (this.S.spinning) { busyToast(); return false; } return true; },
-  unmount() { this.S.alive = false; cancelAnimationFrame(this.S.raf); this.S.off(); },
+  canClose() { if (this.S.spinning || (this.S.SH && this.S.mine.size)) { UI.toast(this.S.mine.size ? 'Tienes fichas en la mesa: espera al resultado' : 'Espera a que pare la ruleta', 'bad'); Sfx.play('error'); return false; } return true; },
+  unmount() { const S = this.S; S.alive = false; cancelAnimationFrame(S.raf); S.off(); if (S.SH) { RLN.cbs.delete(S.cb); clearInterval(S.cd); } },
 };
 
 /* =============================== BLACKJACK =============================== */
@@ -3907,6 +3944,11 @@ function autoSpin(side, label, onToggle) {
   return { off() { t.classList.remove('on'); onToggle(false); } };
 }
 
+/** Botón turbo compartido por todas las tragaperras (gira 2,5 veces más rápido) */
+function turboBtn(side) {
+  const b = el('button', { class: 'tog' + (Settings.turbo ? ' on' : ''), 'aria-label': 'Turbo', onclick: () => { Settings.turbo = !Settings.turbo; Settings.save(); b.classList.toggle('on', Settings.turbo); Sfx.play('chip'); } });
+  side.append(el('div', { class: 'betc' }, el('span', { class: 'lbl', text: '⚡ Turbo' }), el('div', { class: 'autoc' }, b, el('span', { style: 'color:var(--muted);font-size:13px', text: 'Giros rápidos · pulsa Girar otra vez para parar' }))));
+}
 Games.fruit = {
   title: 'TRAGAPERRAS', sub: '', theme: 't-fruit',
   rules: o => {
@@ -3941,7 +3983,7 @@ Games.fruit = {
     function syncCoins() { cbtn.forEach((b, i) => b.classList.toggle('on', i < S.lines)); updBet(); }
     const spinB = el('button', { class: 'btn primary wide', text: 'Girar', onclick: () => spin() });
     side.append(el('div', { class: 'betc' }, el('span', { class: 'lbl', text: 'Líneas activas' }), coins), spinB);
-    const au = autoSpin(side, 'Giro automático', v => { S.auto = v; if (v && !S.busy) spin(); });
+    const au = autoSpin(side, 'Giro automático', v => { S.auto = v; if (v && !S.busy) spin(); }); turboBtn(side);
     const pt = el('div', { class: 'ptab' });
     Object.entries(M.pays).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => { const ic = el('span', { style: 'display:flex;gap:2px' }, Sym.icon(k), Sym.icon(k), Sym.icon(k)); pt.append(ic, el('span', { text: '×' + v })); });
     if (M.anyBar) pt.append(el('span', { style: 'display:flex;gap:2px' }, Sym.icon('bar'), Sym.icon('seven'), Sym.icon('bar')), el('span', { text: '×' + M.anyBar }));
@@ -3956,7 +3998,7 @@ Games.fruit = {
     function bulbAnim(mode) { clearInterval(S.timer); const bs = [...bulbs.children]; let k = 0; if (!mode) { bs.forEach((b, i) => b.classList.toggle('on', i % 3 === 0)); return; } S.timer = setInterval(() => { k++; bs.forEach((b, i) => b.classList.toggle('on', mode === 'win' ? k % 2 === 0 : (i + k) % 4 === 0)); }, mode === 'win' ? 140 : 80); }
     bulbAnim(null);
     async function spin() {
-      if (S.busy) return;
+      if (S.busy) { reels.slam(); return; }
       const coin = bc.value, bet = coin * S.lines;
       if (!Wallet.bet(bet, 'fruit')) { au.off(); return; }
       S.busy = true; spinB.disabled = true; bc.lock(true); lcdWin.textContent = '0,00'; Sfx.play('lever');
@@ -3976,7 +4018,7 @@ Games.fruit = {
         setTimeout(() => S.alive && bulbAnim(null), 1600);
       } else { bulbAnim(null); Sfx.play('lose'); }
       S.busy = false; spinB.disabled = false; bc.lock(false);
-      if (S.auto && S.alive) setTimeout(() => S.alive && S.auto && spin(), won ? 1100 : 450);
+      if (S.auto && S.alive) setTimeout(() => S.alive && S.auto && spin(), Settings.turbo ? (won ? 500 : 120) : (won ? 1100 : 450));
     }
     S.spin = spin; syncCoins();
   },
@@ -4014,7 +4056,7 @@ Games.slots = {
     const bc = BetControl(side, { key: 'slots' + (o.theme || 0), label: 'Apuesta total (20 líneas)', min: 20, max: 20000, value: 100, ladder: [20, 40, 100, 200, 400, 1000, 2000, 4000, 10000, 20000] });
     const spinB = el('button', { class: 'btn primary wide', text: 'Girar', onclick: () => spin() });
     side.append(spinB);
-    const au = autoSpin(side, 'Giro automático', v => { S.auto = v; if (v && !S.busy) spin(); });
+    const au = autoSpin(side, 'Giro automático', v => { S.auto = v; if (v && !S.busy) spin(); }); turboBtn(side);
     const sLast = statBox('Último premio'), sFs = statBox('Giros gratis', '—');
     side.append(sLast.el, sFs.el);
     const pt = el('div', { class: 'ptab' });
@@ -4025,7 +4067,7 @@ Games.slots = {
     const reels = new Reels(cv, { cols: 5, rows: 3, cell, gap: 6, colBg: T.reelBg, filler: () => wpick(T.syms, T.w, RNG.float) }); S.reels = reels;
     function setMsg(t, lose) { msg.textContent = t; msg.classList.toggle('lose', !!lose); }
     async function spin() {
-      if (S.busy) return;
+      if (S.busy) { if (S.fs <= 0 || true) reels.slam(); return; }
       let bet; const free = S.fs > 0;
       if (free) { bet = S.fsBet; S.fs--; sFs.set(S.fs + ' restantes', true); fsb.textContent = `GIROS GRATIS · ${S.fs} · ×${T.fsMult}`; }
       else { bet = bc.value; if (!Wallet.bet(bet, 'slots')) { au.off(); return; } Jackpot.add(bet * .01); }
@@ -4063,7 +4105,7 @@ Games.slots = {
         else setMsg('Fin de los giros gratis', true);
       }
       spinB.disabled = false; bc.lock(false);
-      if (S.auto && S.alive) setTimeout(() => S.alive && S.auto && spin(), won ? 1000 : 400);
+      if (S.auto && S.alive) setTimeout(() => S.alive && S.auto && spin(), Settings.turbo ? (won ? 500 : 120) : (won ? 1000 : 400));
     }
     S.spin = spin;
   },
@@ -5527,7 +5569,7 @@ const Phone = {
   head(t) { return `<div class="ph-head"><button class="ph-back" data-go="home">‹</button><h4>${t}</h4></div>`; },
   go(app) {
     this.app = app; const B = $('#phB'), s = this.st();
-    const apps = [['map', 'Mapa', '🗺️', '#2fbf71'], ['bank', 'Banco', '💳', '#d9a21a'], ['msg', 'Mensajes', '💬', '#1ea0d0'], ['ward', 'Armario', '👕', '#d02a7a'], ['rank', 'Ranking', '🏆', '#e0801a'], ['prof', 'Perfil', '⭐', '#8a3ad0'], ['news', 'Noticias', '📰', '#3a6ad0'], ['emo', 'Gestos', '🕺', '#3aa08a'], ['garage', 'Garaje', '🚗', '#c0392b'], ['race', 'Carreras', '🏁', '#222838'], ['biz', 'Negocios', '🏪', '#2a9a8a'], ['city', 'Alcaldía', '🏛️', '#6a5acd'], ['cfg', 'Ajustes', '⚙️', '#5a6070']];
+    const apps = [['map', 'Mapa', '🗺️', '#2fbf71'], ['bank', 'Banco', '💳', '#d9a21a'], ['msg', 'Mensajes', '💬', '#1ea0d0'], ['ward', 'Armario', '👕', '#d02a7a'], ['rank', 'Ranking', '🏆', '#e0801a'], ['prof', 'Perfil', '⭐', '#8a3ad0'], ['news', 'Noticias', '📰', '#3a6ad0'], ['emo', 'Gestos', '🕺', '#3aa08a'], ['garage', 'Garaje', '🚗', '#c0392b'], ['race', 'Carreras', '🏁', '#222838'], ['jobs', 'Trabajos', '💼', '#3a7a3a'], ['biz', 'Negocios', '🏪', '#2a9a8a'], ['city', 'Alcaldía', '🏛️', '#6a5acd'], ['cfg', 'Ajustes', '⚙️', '#5a6070']];
     let h = '';
     if (app === 'home') {
       h = `<div class="ph-clock"><b>${Env.timeStr()}</b><span>${World.scene.label} · ${eur(Wallet.cents)}</span></div><div class="ph-grid">` +
@@ -5564,6 +5606,7 @@ const Phone = {
         `<p class="note" style="font-size:11px">Más modelos en la tienda fnac de Salera.</p><button class="btn wide" data-go="gamecfg">Ajustes del juego</button>`;
     } else if (app === 'ward') { this.toggle(false); Style.wardrobe(); return; }
     else if (app === 'rank') { this.toggle(false); Hub.open('rank'); return; }
+    else if (app === 'jobs') { this.toggle(false); Jobs.board(); return; }
     else if (app === 'biz') { this.toggle(false); Biz.panel(); return; }
     else if (app === 'city') { this.toggle(false); City.modal(); return; }
     else if (app === 'prof') { this.toggle(false); Hub.open('perfil'); return; }
@@ -6047,6 +6090,10 @@ Net.receive = function (m) {
     this.ver = m.v; return;
   }
   if (m && m.t === 'feed') { Feed.add(m); return; }
+  if (m && m.t === 'rl') { RLN[m.k] = { ph: m.ph, t0: performance.now() - m.el, n: m.n, bets: m.bets || [], hist: m.hist || [] }; RLN.cbs.forEach(f => f(m.k, m)); return; }
+  if (m && m.t === 'rlno') { const S = Games.roulette.S; if (S && S.alive && S.rlno) S.rlno(m.c); return; }
+  if (m && m.t === 'occ') { Occ.map = new Map(m.list.map(([k, id, n]) => [k, { id, n }])); return; }
+  if (m && m.t === 'occno') { if (UI.panelMachine === m.k) { UI.panelMachine = null; UI.close(true); UI.toast('Esta máquina la está usando ' + m.n + '. Busca otra libre.', 'bad'); } return; }
   if (m && m.t === 'jx') { JXN.ph = m.ph; JXN.t0 = performance.now() - m.el; JXN.r = m.r; JXN.crash = m.crash || 0; JXN.hist = m.hist || []; JXN.cb && JXN.cb('jx', m); return; }
   if (m && m.t === 'jxb') { JXN.bets = m.list || []; JXN.br = m.r; JXN.cb && JXN.cb('jxb', m); return; }
   if (m && (m.t === 'jxok' || m.t === 'jxno')) { JXN.cb && JXN.cb(m.t, m); return; }
@@ -6060,6 +6107,16 @@ Bus.on('net', on => {
 Bus.on('netcount', () => NetHud.draw());
 const NetHud = { draw() { const e = $('#online'); if (!e) return; if (Net.mode === 'local') { e.hidden = true; return; } e.hidden = false; e.classList.toggle('off', Net.mode !== 'online'); e.textContent = Net.mode === 'online' ? '● ' + Math.max(1, Net.online) + ' en línea' : '● sin conexión'; } };
 
+/** Ruletas compartidas (una por mesa) */
+const RLN = { cbs: new Set() };
+/** Máquinas ocupadas: solo un jugador por máquina */
+const SHARED_GAMES = new Set(['roulette', 'jetx', 'burger', 'lifeguard']);
+const Occ = {
+  map: new Map(),
+  who(k) { const o = this.map.get(k); return o && o.id !== Net.id ? o : null; },
+  claim(k) { this.map.set(k, { id: Net.id, n: Settings.name }); Net.transport.send({ t: 'occ', k, on: true }); },
+  release(k) { const o = this.map.get(k); if (o && o.id === Net.id) this.map.delete(k); Net.transport.send({ t: 'occ', k, on: false }); },
+};
 /** Estado de la ronda JetX compartida (lo manda el servidor) */
 const JXN = { ph: 'wait', t0: 0, r: 0, crash: 0, hist: [], bets: [], br: 0, cb: null };
 const gameName = g => (Games[g] && Games[g].title) ? Games[g].title.charAt(0) + Games[g].title.slice(1).toLowerCase() : g;
@@ -6538,6 +6595,12 @@ function buildSur() {
     // socorrista
     for (const [dx, dz] of [[-.8, -.8], [.8, -.8], [-.8, .8], [.8, .8]]) G.box(10 + dx - .08, 0, 116 + dz - .08, 10 + dx + .08, 2.6, 116 + dz + .08, '#e8e4dc');
     G.box(9, 2.6, 115, 11, 2.8, 117, '#c8102e'); G.box(9.1, 2.8, 115.1, 10.9, 4, 115.25, '#c8102e'); box(9, 115, 11, 117, 4);
+    sc.interact.push({ x: 10, z: 113.4, r: 2.2, label: 'Torre de socorrista', get sub() { return 'Trabajo · maestría nivel ' + Jobs.lvl('lifeguard'); }, fn: () => UI.open('lifeguard') });
+    // oficina de empleo (trabajos y maestría)
+    G.box(-21, 0, 53.6, -17, 2.8, 55.2, '#2a4a6a', { top: '#1a2a3a' }); G.box(-21.3, 2.8, 53.3, -16.7, 3.1, 55.5, '#3df58a'); box(-21, 53.6, -17, 55.2, 3);
+    G.rect('s', 55.21, -20.4, -17.6, .9, 2.3, '#bfe8ff', false, .02);
+    k.sign('EMPLEO', '#3df58a', 2.4, [-19, 3.6, 55.3], 0);
+    sc.interact.push({ x: -19, z: 56.6, r: 2, label: 'Oficina de Empleo', sub: 'Trabajos y maestría · repartidor, taxista, socorrista', fn: () => Jobs.board() });
     k.sign('PLAYA DEL NEÓN', '#3ff2ff', 4.2, [-36, 3.2, 104.2], 0); G.box(-36.1, 0, 104.1, -35.9, 2.7, 104.3, '#2a2a33');
     k.sign('DISTRITO SUR ↓', '#3df58a', 3.6, [-34, 3.4, 33.2], 0); k.sign('AYUNTAMIENTO · PLAYA ↓', '#ffcf5a', 4.6, [34, 3.4, 33.2], 0);
     // fondo: edificios al este de la calle lateral y hacia el oeste
@@ -6551,6 +6614,174 @@ function buildSur() {
     k.npc(-6, 51.3, 0, null, true); k.npc(6, 60.7, Math.PI, null, true);
   });
 }
+
+/* ---- 23_jobs.js ---- */
+/* =====================================================================
+   TRABAJOS Y MAESTRÍA
+   BURGER BOOM (cocina), Repartidor (a pie o en coche), Taxista (con tu coche)
+   y Socorrista (playa). Cada trabajo tiene su maestría: cuanto más trabajas,
+   más nivel y más cobras (hasta ×2,08 en el nivel 10).
+   ===================================================================== */
+const JOBS = {
+  burger: { n: 'Cocinero en BURGER BOOM', ic: '🍔', where: 'BURGER BOOM, frente al casino', w: [0, 8.4] },
+  delivery: { n: 'Repartidor', ic: '📦', where: 'Oficina de Empleo (Distrito Sur) o app Trabajos', w: [-19, 53] },
+  taxi: { n: 'Taxista', ic: '🚕', where: 'Necesitas un coche (Royale Motors) · app Trabajos', w: [-19, 53] },
+  lifeguard: { n: 'Socorrista', ic: '🛟', where: 'Torre de vigilancia de la Playa del Neón', w: [10, 113.5] },
+};
+const JOB_MAX = 10;
+const Jobs = {
+  st() { const s = Prog.s; if (!s.jobs) s.jobs = {}; return s.jobs; },
+  xp(id) { return this.st()[id] || 0; },
+  need(l) { return 50 * (l - 1) * l; }, // xp total para llegar al nivel l
+  lvl(id) { let l = 1; while (l < JOB_MAX && this.xp(id) >= this.need(l + 1)) l++; return l; },
+  mult(id) { return 1 + .12 * (this.lvl(id) - 1); },
+  gain(id, cents) {
+    const before = this.lvl(id); this.st()[id] = this.xp(id) + Math.max(1, Math.round(cents / 100)); Prog.save();
+    const after = this.lvl(id);
+    if (after > before) { UI.toast(`${JOBS[id].ic} ¡Maestría de ${JOBS[id].n}: nivel ${after}! Ahora cobras ×${this.mult(id).toFixed(2).replace('.', ',')}`, 'good'); Sfx.play('bigwin'); FX.confetti(70); FX.float(null, 'NIVEL ' + after, '#ffcf5a', 52); }
+  },
+  bar(id) { const l = this.lvl(id), x = this.xp(id), a = this.need(l), b = this.need(l + 1), k = l >= JOB_MAX ? 1 : (x - a) / (b - a); return `<div style="height:6px;border-radius:9px;background:rgba(255,255,255,.1);margin-top:4px"><div style="height:100%;width:${Math.round(k * 100)}%;border-radius:9px;background:linear-gradient(90deg,#3df58a,#ffcf5a)"></div></div>`; },
+  board() {
+    const draw = c => {
+      c.innerHTML = `<h2>Oficina de Empleo</h2><p class="note" style="margin-top:0">Cada trabajo tiene su <b>maestría</b>: sube de nivel trabajando y cobrarás más (+12 % por nivel, hasta el nivel ${JOB_MAX}).</p>` +
+        Object.entries(JOBS).map(([id, j]) => `<div class="hm-row" style="align-items:flex-start"><span style="flex:1">${j.ic} <b>${j.n}</b> · nivel ${this.lvl(id)} · ×${this.mult(id).toFixed(2).replace('.', ',')}<br><small style="color:var(--muted)">${j.where}</small>${this.bar(id)}</span>
+          ${id === 'delivery' || id === 'taxi' ? `<button class="btn sm primary" data-start="${id}" ${this.cur ? 'disabled' : ''}>${this.cur && this.cur.id === id ? 'En curso' : 'Empezar'}</button>` : `<button class="btn sm" data-go="${id}">Ir</button>`}</div>`).join('') +
+        (this.cur ? `<div class="hm-act"><button class="btn danger" data-stop>Dejar el turno</button></div>` : '') + `<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
+      c.querySelector('#mOk').onclick = () => UI.closeModal();
+      $$('[data-start]', c).forEach(b => b.onclick = () => { UI.closeModal(); this.start(b.dataset.start); });
+      $$('[data-go]', c).forEach(b => b.onclick = () => { const j = JOBS[b.dataset.go]; UI.closeModal(); World.setWaypoint({ x: j.w[0], z: j.w[1], label: j.n }); UI.toast('Sigue la flecha verde', ''); });
+      const st = c.querySelector('[data-stop]'); st && (st.onclick = () => { this.stop('Has dejado el turno'); draw(c); });
+    };
+    UI.modal('', draw); $('#modal').classList.add('right');
+  },
+
+  /* ---------- Repartidor y Taxista (en el mundo abierto) ---------- */
+  spots() {
+    const L = [['BURGER BOOM', 0, 8.4], ['Casino Neon Royale', 0, -6.5], ['Ayuntamiento', 0, 49.5], ['Parque Central', -50, 50], ['Centro comercial Salera', 72, -11.5], ['Avenida Salera', 60, 6], ['Playa del Neón', -30, 107]];
+    for (const h of HOMES) L.push([h.n, h.x, h.fz - h.s * 1.4]);
+    for (const [id, x, z] of [['kiosk', -18.5, 76], ['cafe', 0, 76], ['phones', 18.5, 76], ['club', -18.5, 104], ['bowling', 0, 104], ['gym', 18.5, 104], ['wash', -51.5, 84], ['beach', -14, 110]]) L.push([BIZ.find(b => b.id === id).n, x, z]);
+    return L;
+  },
+  pos() { if (World.driving && Vehicles.car) return { x: Vehicles.car.x, z: Vehicles.car.z }; const p = World.player; return { x: p.x, z: p.z }; },
+  start(id) {
+    if (this.cur) return;
+    if (id === 'taxi' && !(typeof Vehicles !== 'undefined' && Vehicles.car)) { UI.toast('Para ser taxista necesitas un coche. Cómpralo en Royale Motors (Avenida Salera).', 'bad'); return; }
+    this.cur = { id, n: 0, earned: 0 }; this.next(); this.hud(); Sfx.play('ding');
+    clearInterval(this.tm); this.tm = setInterval(() => this.tick(), 200);
+  },
+  next() {
+    const c = this.cur, me = this.pos(), S = this.spots(), far = S.filter(s => Math.hypot(s[1] - me.x, s[2] - me.z) > 25);
+    const pick = a => a[Math.floor(Math.random() * a.length)];
+    const pickup = c.id === 'delivery' ? pick(S.filter(s => /BURGER|Cafetería|Chiringuito/.test(s[0]))) : pick(far.length ? far : S);
+    let drop = pick(S.filter(s => Math.hypot(s[1] - pickup[1], s[2] - pickup[2]) > 30)); if (!drop) drop = pick(S);
+    const dist = Math.hypot(drop[1] - pickup[1], drop[2] - pickup[2]);
+    c.leg = 0; c.pick = pickup; c.drop = drop; c.dist = dist; c.limit = 0; c.t0 = 0;
+    this.goal(pickup, c.id === 'delivery' ? 'Recoge el pedido en ' + pickup[0] : 'Recoge al cliente: ' + pickup[0]);
+    if (c.id === 'taxi') { if (this.npc) World.three.scene.remove(this.npc.root); this.npc = makeHuman(randomLook()); this.npc.root.position.set(pickup[1] + 1.2, 0, pickup[2]); World.three.scene.add(this.npc.root); }
+  },
+  goal(s, txt) { this.cur.txt = txt; World.setWaypoint({ x: s[1], z: s[2], label: s[0] }); this.hud(); },
+  tick() {
+    const c = this.cur; if (!c) return; const p = this.pos(), tgt = c.leg === 0 ? c.pick : c.drop, d = Math.hypot(tgt[1] - p.x, tgt[2] - p.z);
+    const slow = !World.driving || Math.abs(Vehicles.car.v) < 4;
+    if (this.npc) this.npc.animate(.2, 0, performance.now() / 1000);
+    if (d < (World.driving ? 5 : 3) && slow) {
+      if (c.leg === 0) {
+        c.leg = 1; c.t0 = performance.now(); c.limit = Math.round(c.dist / (c.id === 'taxi' ? 6 : 3.4) + (c.id === 'taxi' ? 25 : 30));
+        if (this.npc) { World.three.scene.remove(this.npc.root); this.npc = null; }
+        Sfx.play('chip'); UI.toast(c.id === 'delivery' ? '📦 Pedido recogido. ¡Llévalo a ' + c.drop[0] + '!' : '🚕 Cliente a bordo. Destino: ' + c.drop[0], 'good');
+        this.goal(c.drop, (c.id === 'delivery' ? 'Entrega en ' : 'Lleva al cliente a ') + c.drop[0]);
+      } else {
+        const secs = (performance.now() - c.t0) / 1000, fast = secs < c.limit * .6, late = secs > c.limit;
+        let pay = c.id === 'taxi' ? 300 + c.dist * 9 : 150 + c.dist * 5; if (fast) pay *= 1.4; if (late) pay *= .5; pay = Math.round(pay);
+        const before = Wallet.cents; Wallet.earn(pay, c.id); const got = Wallet.cents - before; c.n++; c.earned += got;
+        Sfx.play('cashout'); FX.coins(null, 14); FX.float(null, '+' + fmt(got) + (fast ? ' ⚡ RÁPIDO' : ''), fast ? '#ffcf5a' : '#9dffc4', 40);
+        Prog.addXp && Prog.addXp(4); this.next();
+      }
+    }
+    this.hud();
+  },
+  stop(msg) {
+    const c = this.cur; if (!c) return; clearInterval(this.tm); this.cur = null; World.setWaypoint(null);
+    if (this.npc) { World.three.scene.remove(this.npc.root); this.npc = null; }
+    $('#job').hidden = true; UI.toast((msg || 'Turno terminado') + ' · ' + c.n + ' viajes · ' + fmt(c.earned), 'good');
+  },
+  hud() {
+    let e = $('#job'); if (!e) { e = el('div', { id: 'job' }); document.body.append(e); }
+    const c = this.cur; if (!c) { e.hidden = true; return; } e.hidden = false;
+    const left = c.leg === 1 ? Math.max(0, c.limit - (performance.now() - c.t0) / 1000) : null;
+    e.innerHTML = `<b>${JOBS[c.id].ic} ${JOBS[c.id].n} · nv ${this.lvl(c.id)}</b><span>${c.txt}</span>${left != null ? `<span class="num ${left < 10 ? 'late' : ''}">⏱ ${Math.ceil(left)} s${left > c.limit * .4 ? ' · bonus rápido' : ''}</span>` : ''}<span class="num">${c.n} hechos · ${fmt(c.earned)}</span><button class="btn sm" id="jobStop">Dejar</button>`;
+    $('#jobStop', e).onclick = () => this.stop();
+  },
+};
+// la maestría multiplica lo que cobras en cada trabajo y suma experiencia
+{ const _earn = Wallet.earn; Wallet.earn = function (c, src) { if (JOBS[src]) { c = Math.round(c * Jobs.mult(src)); Jobs.gain(src, c); } return _earn.call(this, c, src); }; }
+ACHS.push(['job3', 'Pluriempleo', 'Trabaja en 3 oficios distintos', () => Object.keys(Jobs.st()).filter(k => Jobs.xp(k) > 0).length >= 3], ['jobmax', 'Maestro', 'Llega al nivel 5 de maestría en un trabajo', () => Object.keys(JOBS).some(k => Jobs.lvl(k) >= 5)]);
+
+/* ---------- Socorrista: minijuego en la playa ---------- */
+Games.lifeguard = {
+  title: 'SOCORRISTA', sub: 'Playa del Neón · turno de 45 s', theme: 't-jetx',
+  rules: `<h3>Socorrista</h3><ul><li>Vigila a los bañistas. Cuando uno empieza a pedir ayuda (aro rojo y «¡SOCORRO!»), haz clic en él antes de que se acabe su tiempo.</li>
+    <li>Cada rescate paga y los rescates seguidos suben el combo (×2, ×3…). Si tocas a alguien que está bien, pierdes el combo.</li>
+    <li>Al final del turno cobras todo, multiplicado por tu maestría de socorrista.</li></ul>`,
+  mount(body) {
+    const { stage, side } = split2(body);
+    const cv = el('canvas', { class: 'gc' }); stage.append(cv);
+    const sRes = statBox('Rescates', '0'), sCombo = statBox('Combo', '×1'), sPay = statBox('Cobrarás', fmt(0)), sT = statBox('Tiempo', '45 s');
+    const go = el('button', { class: 'btn primary wide', text: 'Empezar turno', onclick: () => start() });
+    side.append(el('p', { class: 'note', style: 'margin:0', text: 'Nivel de maestría ' + Jobs.lvl('lifeguard') + ' · cobras ×' + Jobs.mult('lifeguard').toFixed(2).replace('.', ',') }), go, sT.el, sRes.el, sCombo.el, sPay.el);
+    const S = this.S = { alive: true, on: false, t: 0, sw: [], res: 0, combo: 0, pay: 0, next: 1, raf: 0 };
+    let W = 0, H = 0, g = null;
+    const resize = () => { const r = stage.getBoundingClientRect(); W = Math.max(200, r.width); H = Math.max(180, r.height); cv.style.width = W + 'px'; cv.style.height = H + 'px'; g = fitCanvas(cv, W, H); };
+    S.off = observe(stage, resize);
+    const mk = () => ({ x: .12 + Math.random() * .76, y: .3 + Math.random() * .6, ph: Math.random() * TAU, st: 'ok', tl: 0, col: ['#ff6a8a', '#3ff2ff', '#ffcf5a', '#3df58a', '#b45cff'][Math.floor(Math.random() * 5)] });
+    function start() { S.on = true; S.t = 45; S.sw = Array.from({ length: 8 }, mk); S.res = 0; S.combo = 0; S.pay = 0; S.next = 1.2; go.disabled = true; go.textContent = 'Turno en curso…'; Sfx.play('whoosh'); upd(); }
+    function upd() { sRes.set(String(S.res)); sCombo.set('×' + Math.max(1, S.combo), S.combo > 1); sPay.set(fmt(S.pay), S.pay > 0); sT.set(Math.ceil(Math.max(0, S.t)) + ' s'); }
+    function end() {
+      S.on = false; go.disabled = false; go.textContent = 'Otro turno';
+      if (S.pay > 0) { const b = Wallet.cents; Wallet.earn(S.pay, 'lifeguard'); const got = Wallet.cents - b; UI.celebrate(got, Math.max(1, S.pay / 3), cv); UI.toast('Turno terminado: ' + S.res + ' rescates · cobras ' + fmt(got), 'good'); }
+      else UI.toast('Turno terminado sin rescates', '');
+      upd();
+    }
+    cv.addEventListener('pointerdown', e => {
+      if (!S.on) return; const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / W, y = (e.clientY - r.top) / H;
+      let best = null, bd = .07; for (const s of S.sw) { const d = Math.hypot(s.x - x, (s.y * .85 - y) * H / W); if (d < bd) { bd = d; best = s; } }
+      if (!best) return;
+      if (best.st === 'help') {
+        S.combo++; S.res++; const p = 120 * Math.min(S.combo, 6); S.pay += p; Object.assign(best, mk(), { st: 'saved', tl: .8 });
+        Sfx.play('win', 1 + Math.min(S.combo, 8) * .05); FX.float({ x: e.clientX, y: e.clientY }, '+' + fmt(p) + (S.combo > 1 ? ' ×' + S.combo : ''), S.combo > 2 ? '#ffcf5a' : '#9dffc4', 30 + Math.min(S.combo, 6) * 3); FX.burst({ x: e.clientX, y: e.clientY }, 14, ['#3ff2ff', '#ffffff', '#3df58a']);
+      } else if (best.st === 'ok') { S.combo = 0; Sfx.play('error'); FX.float({ x: e.clientX, y: e.clientY }, 'Está bien', '#ff9fb0', 24); }
+      upd();
+    });
+    let last = performance.now();
+    const frame = now => {
+      if (!S.alive) return; const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
+      if (S.on) {
+        S.t -= dt; S.next -= dt;
+        if (S.next <= 0) { const ok = S.sw.filter(s => s.st === 'ok'); if (ok.length) { const s = ok[Math.floor(Math.random() * ok.length)]; s.st = 'help'; s.tl = Math.max(1.7, 3.3 - (45 - S.t) * .03); Sfx.play('tick'); } S.next = Math.max(.55, 1.6 - (45 - S.t) * .022) * (.7 + Math.random() * .6); }
+        for (const s of S.sw) { if (s.st === 'help') { s.tl -= dt; if (s.tl <= 0) { s.st = 'ok'; S.combo = 0; S.pay = Math.max(0, S.pay - 60); Sfx.play('lose'); FX.shake(cv); upd(); } } else if (s.st === 'saved') { s.tl -= dt; if (s.tl <= 0) s.st = 'ok'; } }
+        if (S.t <= 0) end(); else if (Math.floor(S.t * 10) % 5 === 0) sT.set(Math.ceil(S.t) + ' s');
+      }
+      if (g) {
+        const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#0e3a5c'); gr.addColorStop(1, '#1a6a8a'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+        g.strokeStyle = 'rgba(200,240,255,.18)'; g.lineWidth = 2; for (let i = 0; i < 9; i++) { const y = (i / 9 * H + t * 14) % H; g.beginPath(); for (let x = 0; x <= W; x += 20) g.lineTo(x, y + Math.sin(x * .03 + t * 2 + i) * 4); g.stroke(); }
+        g.fillStyle = '#e0c890'; g.fillRect(0, H * .9, W, H * .1);
+        for (const s of S.sw) {
+          const x = s.x * W, y = s.y * H * .85 + Math.sin(t * 2 + s.ph) * 4, R = Math.max(10, W * .022);
+          if (s.st === 'help') { const k = 1 + Math.sin(t * 14) * .12; g.strokeStyle = '#ff4d5e'; g.lineWidth = 4; g.beginPath(); g.arc(x, y, R * 1.9 * k, 0, TAU); g.stroke(); g.fillStyle = 'rgba(255,77,94,.8)'; g.fillRect(x - R * 1.9, y - R * 3.1, R * 3.8 * (s.tl / 3.3), 5); neonText(g, '¡SOCORRO!', x, y - R * 2.4, R * .95, '#fff', '#ff4d5e'); }
+          if (s.st === 'saved') { g.strokeStyle = '#3df58a'; g.lineWidth = 4; g.beginPath(); g.arc(x, y, R * 2.2 * (1.6 - s.tl), 0, TAU); g.stroke(); }
+          g.fillStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.ellipse(x, y + R * .6, R * 1.5, R * .5, 0, 0, TAU); g.fill();
+          g.fillStyle = '#f1c7a5'; g.beginPath(); g.arc(x, y - R * .2, R * .75, 0, TAU); g.fill(); g.fillStyle = s.col; g.fillRect(x - R * .8, y + R * .3, R * 1.6, R * .5);
+          if (s.st === 'help') { const a = Math.sin(t * 16) * .6; g.strokeStyle = '#f1c7a5'; g.lineWidth = 4; g.beginPath(); g.moveTo(x - R * .6, y); g.lineTo(x - R * 1.3, y - R * 1.4 + a * R); g.moveTo(x + R * .6, y); g.lineTo(x + R * 1.3, y - R * 1.4 - a * R); g.stroke(); }
+        }
+        if (!S.on) neonText(g, S.res ? S.res + ' RESCATES' : 'PULSA «EMPEZAR TURNO»', W / 2, H * .45, Math.min(40, W * .06), '#fff', '#3ff2ff');
+      }
+      S.raf = requestAnimationFrame(frame);
+    };
+    S.raf = requestAnimationFrame(frame);
+  },
+  canClose() { if (this.S.on) { UI.toast('Termina el turno antes de salir', 'bad'); Sfx.play('error'); return false; } return true; },
+  unmount() { this.S.alive = false; cancelAnimationFrame(this.S.raf); this.S.off(); },
+};
 
 /* ---- 99_main.js ---- */
 /* =====================================================================

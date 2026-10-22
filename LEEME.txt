@@ -32,6 +32,11 @@ QUÉ SE COMPARTE ENTRE TODOS
   - El juego al que está jugando cada uno (cartel rosa encima de la cabeza).
   - JetX: una sola ronda para todos, con la lista de apuestas y retiros en directo.
   - Barra "EN DIRECTO" en las máquinas con lo que apuestan y ganan los demás.
+  - Ranking (TOP) de jugadores reales: patrimonio, reputación, mayor premio y torneo.
+  - Elecciones a alcalde cada 30 minutos en el Ayuntamiento (Distrito Sur).
+  Se guardan en data.json. En el plan gratis de Render ese archivo se borra cuando el
+  servidor se reinicia, pero cada jugador guarda una copia del ranking y se la devuelve
+  al servidor al conectarse, así que se recupera solo en cuanto alguien entra.
 
 AVISOS
   - Plan gratis: si nadie juega en 15 minutos el servidor se duerme; el primero que

@@ -549,8 +549,11 @@ const Bus = {
 };
 
 /* ---------- Ajustes ---------- */
-const Settings = Object.assign({ quality: 'auto', sound: true, music: true, volume: 0.7, name: 'Jugador', fps: false, weather: true }, Store.get('settings', {}));
-Settings.save = function () { const o = {}; for (const k of ['quality', 'sound', 'music', 'volume', 'name', 'fps', 'weather']) o[k] = this[k]; Store.set('settings', o); };
+const Settings = Object.assign({ quality: 'auto', sound: true, music: true, volume: 0.7, name: 'Jugador', fps: false, weather: true, view: 1, run: false }, Store.get('settings', {}));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/** Multiplicador de distancia de visión en exteriores (Ajustes) */
+const viewK = sc => (sc && (sc.ext || sc.outdoor)) ? [.75, 1.25, 1.9][Settings.view ?? 1] : 1;
+Settings.save = function () { const o = {}; for (const k of ['quality', 'sound', 'music', 'volume', 'name', 'fps', 'weather', 'view', 'run']) o[k] = this[k]; Store.set('settings', o); };
 /** Nivel de calidad efectivo: 0 bajo, 1 medio, 2 alto */
 function detectQuality() {
   if (Settings.quality === 'low') return 0;
@@ -829,6 +832,10 @@ const FX = (() => {
     n = Math.min(n, [24, 60, 100][Q]);
     for (let i = 0; i < n; i++) add({ k: 'fcoin', x: W / 2 + rnd(-60, 60), y: H + 20, vx: rnd(-380, 380), vy: rnd(-1100, -650), t: rnd(-.8, 0), life: 3, f: rnd(8) });
   }
+  /** Texto que salta y sube (premios, rachas) */
+  function float(src, text, col = '#ffe08a', size = 36, dy = 0) { const o = pt(src); add({ k: 'txt', x: o.x, y: o.y - 10 + dy, t: 0, life: 1.5, text, c: col, s: size }); }
+  /** Destello de pantalla */
+  function flash(col = '#ffcf5a', a = .35) { add({ k: 'flash', t: 0, life: .45, c: col, a }); }
   let last = 0, arrived = 0;
   function loop(ts) {
     const dt = Math.min(.05, (ts - (last || ts)) / 1000); last = ts;
@@ -851,6 +858,12 @@ const FX = (() => {
       } else if (p.k === 'spark') {
         p.vx *= .93; p.vy = p.vy * .93 + 300 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
         const a = 1 - p.t / p.life; cx.globalAlpha = a; cx.fillStyle = p.c; cx.beginPath(); cx.arc(p.x, p.y, p.r * (.5 + a * .5), 0, TAU); cx.fill(); cx.globalAlpha = 1;
+      } else if (p.k === 'flash') {
+        cx.globalAlpha = p.a * (1 - p.t / p.life); cx.fillStyle = p.c; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1;
+      } else if (p.k === 'txt') {
+        p.y -= 55 * dt; const sc = p.t < .14 ? .4 + p.t / .14 * .9 : 1.3 - Math.min(.3, (p.t - .14) * 1.5), a = p.t > p.life - .5 ? (p.life - p.t) / .5 : 1;
+        cx.save(); cx.globalAlpha = a; cx.translate(p.x, p.y); cx.scale(sc, sc); cx.font = `${p.s}px ${FONT_D}`; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+        cx.lineWidth = 6; cx.strokeStyle = 'rgba(20,8,30,.85)'; cx.strokeText(p.text, 0, 0); cx.shadowColor = p.c; cx.shadowBlur = 16; cx.fillStyle = p.c; cx.fillText(p.text, 0, 0); cx.restore();
       } else if (p.k === 'conf') {
         p.x += (p.vx + Math.sin(p.t * 3 + p.a) * 40) * dt; p.y += p.vy * dt; p.a += p.va * dt;
         cx.save(); cx.translate(p.x, p.y); cx.rotate(p.a); cx.scale(1, Math.cos(p.t * 6 + p.a)); cx.fillStyle = p.c; cx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); cx.restore();
@@ -861,7 +874,7 @@ const FX = (() => {
   let pulseT = 0;
   function pulseWallet() { const now = performance.now(); if (now - pulseT < 120) return; pulseT = now; const w = $('#wallet'); w.classList.remove('pulse'); void w.offsetWidth; w.classList.add('pulse'); }
   function shake(node) { if (!node) return; node.classList.remove('shake'); void node.offsetWidth; node.classList.add('shake'); }
-  return { coins, burst, confetti, fountain, shake, walletPos };
+  return { coins, burst, confetti, fountain, shake, walletPos, float, flash };
 })();
 
 /* =====================================================================
@@ -953,11 +966,14 @@ const UI = {
         <small style="color:var(--muted)">«Baja» es la recomendada para ordenadores del instituto con gráficos integrados.</small></div>
       <div class="field"><span class="lbl">Volumen</span><input type="range" id="vol" min="0" max="1" step="0.05" value="${Settings.volume}"></div>
       <div class="field"><span class="lbl">Música</span><div class="seg" id="muSeg"><button data-m="1">Sí</button><button data-m="0">No</button></div></div>
-      <div class="field"><span class="lbl">Nombre (para el futuro modo con amigos)</span><input type="text" id="pname" maxlength="16" value=""></div>
+      <div class="field"><span class="lbl">Tu nombre (lo ven los demás jugadores)</span><input type="text" id="pname" maxlength="16" value=""></div>
       <div class="field"><span class="lbl">Clima y ciclo día/noche</span><div class="seg" id="wxSeg"><button data-x="1">Sí</button><button data-x="0">No</button></div></div>
+      <div class="field"><span class="lbl">Distancia de visión</span><div class="seg" id="vwSeg"><button data-v="0">Cerca</button><button data-v="1">Normal</button><button data-v="2">Lejos</button></div>
+        <small style="color:var(--muted)">«Lejos» deja ver toda la ciudad de punta a punta; «Cerca» va más fluido en ordenadores lentos.</small></div>
+      <div class="field"><span class="lbl">Correr siempre (Shift para andar)</span><div class="seg" id="runSeg"><button data-r="1">Sí</button><button data-r="0">No</button></div></div>
       <div class="field"><span class="lbl">Mostrar FPS</span><div class="seg" id="fpsSeg"><button data-f="1">Sí</button><button data-f="0">No</button></div></div>
       <p style="font-size:14px;color:var(--muted)">Apostado: ${fmt(s.wagered)} · Ganado en premios: ${fmt(s.won)} · Sueldo en BURGER BOOM: ${fmt(s.earned)} · Mayor premio: ${fmt(s.best)}</p>
-      <div class="acts"><button class="btn primary" id="mOk">Listo</button><button class="btn danger" id="mReset">Reiniciar saldo a 100 €</button></div>`, c => {
+      <div class="acts"><button class="btn primary" id="mOk">Listo</button></div>`, c => {
       const segs = (id, attr, cur, fn) => { $$('#' + id + ' button', c).forEach(b => { b.classList.toggle('on', b.dataset[attr] === cur); b.onclick = () => { $$('#' + id + ' button', c).forEach(x => x.classList.remove('on')); b.classList.add('on'); fn(b.dataset[attr]); }; }); };
       segs('qSeg', 'q', Settings.quality, v => { Settings.quality = v; Settings.save(); Q = detectQuality(); World && World.applyQuality(); });
       segs('muSeg', 'm', Settings.music ? '1' : '0', v => { Settings.music = v === '1'; Settings.save(); Sfx.apply(); });
@@ -966,8 +982,8 @@ const UI = {
       $('#vol', c).oninput = e => { Settings.volume = +e.target.value; Settings.save(); Sfx.apply(); };
       const pn = $('#pname', c); pn.value = Settings.name; pn.oninput = () => { Settings.name = pn.value.trim().slice(0, 16) || 'Jugador'; Settings.save(); };
       $('#mOk', c).onclick = () => this.closeModal();
-      let armed = false;
-      $('#mReset', c).onclick = e => { if (!armed) { armed = true; e.target.textContent = 'Pulsa otra vez para confirmar'; return; } Wallet.reset(); this.toast('Saldo reiniciado a 100,00 €', 'good'); this.closeModal(); };
+      segs('vwSeg', 'v', String(Settings.view ?? 1), v => { Settings.view = +v; Settings.save(); World && World.refreshFog(); });
+      segs('runSeg', 'r', Settings.run ? '1' : '0', v => { Settings.run = v === '1'; Settings.save(); });
     });
   },
 
@@ -990,13 +1006,18 @@ const UI = {
   /** Celebración proporcional al premio */
   async celebrate(win, bet, src, label) {
     if (win <= 0) return;
-    const r = bet > 0 ? win / bet : 1;
-    if (label || r >= 15) { FX.coins(src, 30); await this.bigWin(win, bet, label); }
-    else if (r >= 4) { Sfx.play('win'); FX.coins(src, 20); FX.burst(src, 30); }
-    else if (r > 1) { Sfx.play('smallwin'); FX.coins(src, 10); }
-    else { Sfx.play('coin'); FX.coins(src, 4); }
+    const r = bet > 0 ? win / bet : 1, st = Hype.won(), pr = '+' + fmt(win);
+    if (st >= 3) setTimeout(() => { FX.float({ x: innerWidth / 2, y: innerHeight * .2 }, '🔥 RACHA ×' + st, st >= 6 ? '#ff4d6d' : '#ff9f1c', 30 + Math.min(st, 10) * 2); Sfx.play('win', 1 + Math.min(st, 10) * .06); }, 350);
+    if (label || r >= 15) { FX.flash('#ffcf5a', .45); FX.coins(src, 30); await this.bigWin(win, bet, label); }
+    else if (r >= 4) { Sfx.play('win'); FX.flash('#ffcf5a', .22); FX.coins(src, 24); FX.burst(src, 40); FX.float(src, pr, '#ffe08a', 48); setTimeout(() => FX.float(src, r >= 8 ? '¡GRAN PREMIO!' : '¡BUENA!', '#ff3d9a', 30, 62), 120); FX.shake(this.panelCard); }
+    else if (r > 1) { Sfx.play('smallwin'); FX.coins(src, 12); FX.burst(src, 16, ['#3df58a', '#ffcf5a', '#ffffff']); FX.float(src, pr, '#9dffc4', 36); }
+    else { Sfx.play('coin'); FX.coins(src, 4); FX.float(src, pr, '#ffffff', 26); }
   },
 };
+
+/** Rachas: victorias seguidas (se corta al apostar sin haber ganado la jugada anterior) */
+const Hype = { streak: 0, open: false, won() { this.open = false; return ++this.streak; } };
+Bus.on('wallet', tx => { if (tx.type === 'bet') { if (Hype.open) Hype.streak = 0; Hype.open = true; } });
 
 /* ---- Control de apuesta reutilizable (céntimos) ---- */
 const LADDER = [10, 20, 50, 100, 200, 500, 1000, 2000, 2500, 5000, 10000, 20000, 50000];
@@ -1571,7 +1592,7 @@ const World = (() => {
     initMats(); GLOW_TEX = glowTexture(); BLOB_TEX = blobTexture();
     applyQuality(true);
     addEventListener('resize', resize); resize();
-    const steps = [['city', () => extendCity(buildCity())], ['avenida', buildAvenida], ['salera', buildSalera], ['casino', () => extendCasino(buildCasino())], ['premier', buildPremier], ['vip', buildVip], ['roof', buildRoof], ['burger', buildBurger], ...(typeof Homes !== 'undefined' ? Homes.steps() : [])];
+    const steps = [['city', () => extendCity(buildCity())], ['avenida', buildAvenida], ['sur', buildSur], ['salera', buildSalera], ['casino', () => extendCasino(buildCasino())], ['premier', buildPremier], ['vip', buildVip], ['roof', buildRoof], ['burger', buildBurger], ...(typeof Homes !== 'undefined' ? Homes.steps() : [])];
     let i = 0;
     return new Promise(res => {
       const next = () => {
@@ -1684,7 +1705,8 @@ const World = (() => {
      interacción se hacen en coordenadas locales del área en la que está. Se pasa de un área a
      otra andando por puertas, escaleras o en ascensor. */
   const PLACE = {
-    city: { off: [0, 0, 0], ext: true, zone: [-1e4, 40, -1e4, 1e4] },
+    city: { off: [0, 0, 0], ext: true, zone: [-1e4, 40, -1e4, 34] },
+    sur: { off: [0, 0, 0], ext: true, zone: [-1e4, 40, 34, 1e4] },
     avenida: { off: [-328, 0, 0], ext: true, zone: [40, 1e4, -1e4, 1e4] },
     casino: { off: [0, 0, 376], zone: [-18.4, 18.4, -38.4, -10] },
     premier: { off: [0, 6, 776], zone: [-18.4, 18.4, -38.4, -10] },
@@ -1708,19 +1730,20 @@ const World = (() => {
     const inExt = cur.ext;
     for (const id in scenes) {
       const s = scenes[id];
-      let v = s === cur || (inExt && s.ext && Math.abs(player.x - (s.zone.x0 + s.zone.x1) / 2) < 260);
+      let v = s === cur || (inExt && s.ext); // todos los exteriores forman una sola ciudad: siempre se ven
       if (player.ramp && (s === player.ramp.lo || s === player.ramp.hi)) v = true;
       if (player.ride && (s === player.ride.from || s === player.ride.to)) v = true;
       s.group.visible = v;
     }
   }
+  function applyFog(s) { const k = viewK(s); scene.fog = new THREE.Fog(s.fog[0], s.fog[1] * k, s.fog[2] * k); renderer.setClearColor(s.fog[0]); camera.far = Math.max(260, s.fog[2] * k + 60); camera.updateProjectionMatrix(); }
   function setArea(s, snap) {
     if (s === cur) return;
     const prev = cur; if (prev) prev.onLeave && prev.onLeave();
     cur = s; setOutfit(s.id === 'burger');
     if (snap || !prev) { cam.pitch = cam.tpitch = s.cam.pitch; cam.dist = cam.tdist = s.cam.dist; }
     else { cam.tpitch = s.cam.pitch; cam.tdist = clamp(cam.tdist, s.cam.min, s.cam.max); if (prev.ext !== s.ext) cam.tdist = s.cam.dist; }
-    scene.fog = new THREE.Fog(s.fog[0], s.fog[1], s.fog[2]); renderer.setClearColor(s.fog[0]);
+    applyFog(s);
     $('#loc').textContent = s.label; Sfx.setScene(s.music);
     s.onEnter && s.onEnter(); Env.onEnter(s.id);
     visibility(); Bus.emit('scene', s.id);
@@ -1861,8 +1884,8 @@ const World = (() => {
       }
     }
     const len = Math.hypot(mx, mz);
-    const run = keys.has('ShiftLeft') || keys.has('ShiftRight') || (moveTarget && Math.hypot(moveTarget.x - p.x, moveTarget.z - p.z) > 8);
-    const target = len > 0 ? (run ? 6.2 : 3.6) : 0;
+    const shift = keys.has('ShiftLeft') || keys.has('ShiftRight'), run = (Settings.run ? !shift : shift) || (moveTarget && Math.hypot(moveTarget.x - p.x, moveTarget.z - p.z) > 8);
+    const target = len > 0 ? (run ? 8 : 3.8) : 0;
     if (!p.ride) p.speed = lerp(p.speed, target, Math.min(1, dt * 12));
     if (len > 0) {
       mx /= len; mz /= len;
@@ -1933,7 +1956,7 @@ const World = (() => {
   function peerVisible(p) { const sc = scenes[p.scene]; return !!(sc && cur && (sc === cur || (sc.ext && cur.ext))); }
   function onPeer(m) {
     const d = Net.peers.get(m.id) || m; let p = peers.get(m.id);
-    if (!p) { p = { x: d.x, z: d.z, ry: d.ry || 0, lk: null, h: null, tag: makeTag(), carKey: null, car: null }; peers.set(m.id, p); scene.add(p.tag.sprite); }
+    if (!p) { p = { id: m.id, x: d.x, z: d.z, ry: d.ry || 0, lk: null, h: null, tag: makeTag(), carKey: null, car: null }; peers.set(m.id, p); scene.add(p.tag.sprite); }
     if (d.lk && d.lk !== p.lk) { // ropa nueva: reconstruir el muñeco
       p.lk = d.lk; let look; try { look = JSON.parse(d.lk); } catch (e) { look = randomLook(); }
       if (p.h) { scene.remove(p.h.root); p.h.root.traverse(n => { n.geometry && n.geometry.dispose(); }); }
@@ -1952,7 +1975,7 @@ const World = (() => {
       let dr = p.tr - p.ry; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); p.ry += dr * k;
       if (p.car) { p.car.position.set(p.x, 0, p.z); p.car.rotation.y = p.ry; }
       else { p.h.root.position.set(p.x, p.y, p.z); p.h.root.rotation.y = p.ry; p.h.animate(dt, p.mv / 2.2, t); const sc = scenes[p.scene]; const [lx, lz] = loc(sc, p.x, p.z); p.h.light(lx, lz, sc.lights); }
-      p.tag.set(p.name, p.m, p.g); p.tag.sprite.position.set(p.x, p.y + (p.car ? 2.45 : 2.7), p.z);
+      p.tag.set(p.name, p.m, p.g, !!(City.mayor && City.mayor.id === p.id)); p.tag.sprite.position.set(p.x, p.y + (p.car ? 2.45 : 2.7), p.z);
     }
   }
   function dropPeer(id) { const p = peers.get(id); if (!p) return; if (p.h) scene.remove(p.h.root); if (p.car) scene.remove(p.car); scene.remove(p.tag.sprite); peers.delete(id); }
@@ -2004,7 +2027,7 @@ const World = (() => {
   }
   return {
     init, start, enter, ride, defPlace, setWaypoint, setDriving, get driving() { return driving; }, areaAt, collideAt(sc, x, z, r) { const [lx, lz] = loc(sc, x, z); const [a, b] = collideIn(sc, lx, lz, r); return [a + sc.off.x, b + sc.off.z]; }, get keys() { return keys; }, walkTo(x, z) { moveTarget = { x, z }; }, setInputBlocked, applyQuality, showHint, setLook, emote, get scenes() { return scenes; }, get riding() { return player && player.ride; },
-    refreshFog() { scene.fog = new THREE.Fog(cur.fog[0], cur.fog[1], cur.fog[2]); renderer.setClearColor(cur.fog[0]); },
+    refreshFog() { applyFog(cur); },
     get scene() { return cur; }, get player() { return player; }, get three() { return { renderer, scene, camera }; },
     addAnim(sc, a) { (sc.anims || (sc.anims = [])).push(a); },
   };
@@ -2037,7 +2060,7 @@ function buildCity() {
   const sc = {
     label: 'PLAZA DEL NEÓN', music: 'city', group: new THREE.Group(), colliders: [], circles: [], interact: [], anims: [], lights: [],
     cam: { pitch: .4, dist: 8.5, min: 4, max: 15 }, camCollide: true, fog: [0x1a1236, 40, 165],
-    bounds: { x0: -100, x1: 41, z0: -34, z1: 34 }, spawn: { x: 0, z: .5, yaw: 0 },
+    bounds: { x0: -100, x1: 41, z0: -34, z1: 35 }, spawn: { x: 0, z: .5, yaw: 0 },
   };
   const G = new Geo(), R = seeded(7);
   const gl1 = new Glows(1.1), gl3 = new Glows(3.4), gl8 = new Glows(9);
@@ -2105,7 +2128,7 @@ function buildCity() {
   gm.rotation.x = -Math.PI / 2; sc.group.add(gm);
   const far = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshBasicMaterial({ color: 0x17141f })); far.rotation.x = -Math.PI / 2; far.position.y = -.05; sc.group.add(far);
   // calles laterales más allá del lienzo
-  for (const sx of [-34, 34]) for (const sz of [-1, 1]) G.floor(sx - 5, sz > 0 ? 32 : -90, sx + 5, sz > 0 ? 90 : -32, .01, '#25222f', false);
+  for (const sx of [-34, 34]) for (const sz of [-1]) G.floor(sx - 5, sz > 0 ? 32 : -90, sx + 5, sz > 0 ? 90 : -32, .01, '#25222f', false);
   G.floor(-130, -5, -96, 5, .01, '#25222f', false);
 
   /* ---------- Utilidades de edificio ---------- */
@@ -2443,16 +2466,16 @@ function buildCity() {
     if (x + w / 2 > 38) continue; // al este está la Avenida Salera
     if (Math.abs(x) < 20) { tower(x - w / 2, x + w / 2, -60 - R() * 10, -46, h + 18, palette[i % palette.length], ['s'], { y0: 6, lit: .45, beacon: R() < .4 }); continue; }
     tower(x - w / 2, x + w / 2, -48 - R() * 14, -36, h, palette[i % palette.length], ['s'], { y0: 6, lit: .45, beacon: R() < .3 });
-    tower(x - w / 2, x + w / 2, 34, 46 + R() * 14, h * .8, palette[(i + 3) % palette.length], ['n'], { y0: 6, lit: .45, beacon: R() < .3 });
+    if (x + w / 2 < -63) tower(x - w / 2, x + w / 2, 34, 46 + R() * 14, h * .8, palette[(i + 3) % palette.length], ['n'], { y0: 6, lit: .45, beacon: R() < .3 });
   }
   for (const sx of [-1, 1]) {
-    tower(sx > 0 ? 39.5 : -48, sx > 0 ? 47.4 : -39.5, -34, sx > 0 ? -16.2 : -10.5, 18, '#2c2a40', [sx > 0 ? 'w' : 'e'], { lit: .5 });
-    tower(sx > 0 ? 39.5 : -48, sx > 0 ? 48 : -39.5, sx > 0 ? 17.6 : 10.5, 34, 16, '#30293f', [sx > 0 ? 'w' : 'e'], { lit: .5 });
+    tower(sx > 0 ? 39.5 : -48, sx > 0 ? 47.4 : -39.5, -34, sx > 0 ? -14.8 : -10.5, 18, '#2c2a40', [sx > 0 ? 'w' : 'e'], { lit: .5 });
+    tower(sx > 0 ? 39.5 : -48, sx > 0 ? 48 : -39.5, sx > 0 ? 16.4 : 10.5, 34, 16, '#30293f', [sx > 0 ? 'w' : 'e'], { lit: .5 });
     tower(sx > 0 ? 16.5 : -27.5, sx > 0 ? 27.5 : -16.5, -34, -30, 14, '#2a2741', [sx > 0 ? 'e' : 'w'], { lit: .4 });
   }
   // coches aparcados en las calles laterales
   const parkCols = ['#c0392b', '#2c3e50', '#ecf0f1', '#16a085', '#8e44ad', '#f39c12', '#7f8c8d'];
-  { const sv = Bake.lights; for (const sx of [-30.3, 30.3, -37.7, 37.7]) for (let z = 13; z < 60; z += 6.2) if (R() < .7) { addCarGeo(G, sx, Math.sign(z) * z, Math.PI / 2 * (sx > 0 ? 1 : -1), parkCols[Math.floor(R() * parkCols.length)], false); addCarGeo(G, sx, -z, Math.PI / 2 * (sx > 0 ? 1 : -1), parkCols[Math.floor(R() * parkCols.length)], false); collide(sx - 1, sx + 1, z - 2.3, z + 2.3, 1.5); collide(sx - 1, sx + 1, -z - 2.3, -z + 2.3, 1.5); } Bake.lights = sv; }
+  { const sv = Bake.lights; for (const sx of [-30.3, 30.3, -37.7, 37.7]) for (let z = 13; z < 33; z += 6.2) if (R() < .7) { addCarGeo(G, sx, Math.sign(z) * z, Math.PI / 2 * (sx > 0 ? 1 : -1), parkCols[Math.floor(R() * parkCols.length)], false); addCarGeo(G, sx, -z, Math.PI / 2 * (sx > 0 ? 1 : -1), parkCols[Math.floor(R() * parkCols.length)], false); collide(sx - 1, sx + 1, z - 2.3, z + 2.3, 1.5); collide(sx - 1, sx + 1, -z - 2.3, -z + 2.3, 1.5); } Bake.lights = sv; }
 
   /* ---------- Cielo ---------- */
   const skyG = new THREE.SphereGeometry(220, 18, 12); const sc2 = [];
@@ -4507,35 +4530,20 @@ const Prog = {
     const e = $('#tier'); if (!e) return; const t = this.tier(), m = MEMS[this.s.mem];
     e.innerHTML = `<i style="background:${t.col}"></i><span>${t.n} · Rep ${this.lvl()}${this.s.mem ? ' · ' + m.n : ''}</span>`; e.style.color = t.col;
   },
-  /* --- ranking (NPC «Rivales de la casa» hasta que exista el servidor) --- */
+  /* --- ranking: solo jugadores reales (los manda el servidor); sin conexión solo apareces tú --- */
   board(kind) {
-    const me = { name: Settings.name || 'Jugador', me: true };
-    let rows;
-    if (kind === 'wealth') {
-      const R = seeded(4242); rows = RIVAL_NAMES.map((n, i) => ({ name: n, v: Math.round(Math.exp(Math.log(180000) + i * 1.18 + R() * .3)) }));
-      me.v = this.net();
-      rows.forEach(r => r.txt = eur(r.v)); me.txt = eur(me.v);
-    } else if (kind === 'rep') {
-      const R = seeded(777); rows = RIVAL_NAMES.map((n, i) => ({ name: n, v: Math.round(60 + Math.pow(i + 1, 2.1) * 120 + R() * 200) }));
-      me.v = this.s.xp; rows.forEach(r => r.txt = 'Nivel ' + this.lvl(r.v)); me.txt = 'Nivel ' + this.lvl();
-    } else {
-      const t = this.s.tour; rows = this.rivals(dayNo()).map(r => ({ name: r.name, v: r.score, txt: r.score + ' pts' }));
-      if (t.day === dayNo() && t.done) { me.v = t.score; me.txt = t.score + ' pts'; rows.push(me); }
-      rows.sort((a, b) => b.v - a.v); return rows;
-    }
-    rows.push(me); rows.sort((a, b) => b.v - a.v); return rows;
-  },
-  /* --- torneo diario de Video Poker: 10 manos, mismas reglas, rivales de la casa --- */
-  rivals(day) {
-    const R = seeded(day * 104729 + 7), pt = [[.0025, 250], [.0115, 50], [.012, 25], [.0215, 9], [.04, 6], [.046, 4], [.074, 3], [.129, 2], [.215, 1]];
-    return RIVAL_NAMES.slice(0, 9).map(name => { let sc = 0; for (let h = 0; h < 10; h++) { let r = R(), acc = 0; for (const [p, m] of pt) { acc += p; if (r < acc) { sc += m * 100; break; } } } return { name, score: sc }; });
+    const me = { id: Net.id, n: Settings.name || 'Jugador', net: this.net(), lvl: this.lvl(), best: Wallet.stats.best || 0, tour: this.s.tour.day === dayNo() && this.s.tour.done ? this.s.tour.score : -1, tday: dayNo() };
+    let L = (typeof Top !== 'undefined' ? Top.list : []).filter(r => r.id !== Net.id).concat([me]);
+    const f = { wealth: [r => r.net, r => eur(r.net)], rep: [r => r.lvl, r => 'Nivel ' + r.lvl], win: [r => r.best, r => eur(r.best)], tour: [r => r.tday === dayNo() ? r.tour : -1, r => r.tour + ' pts'] }[kind] || [r => r.net, r => eur(r.net)];
+    L = L.filter(r => f[0](r) >= (kind === 'tour' ? 0 : 1) || r.id === Net.id && kind !== 'tour');
+    return L.map(r => ({ name: r.n, v: f[0](r), txt: f[1](r), me: r.id === Net.id })).sort((a, b) => b.v - a.v).slice(0, 50);
   },
   tourState() { const t = this.s.tour; return t.day === dayNo() ? t : (this.s.tour = { day: dayNo(), joined: false, done: false, score: 0, rank: 0, prize: 0 }); },
   tourJoin() { const t = this.tourState(); if (t.joined) return true; if (!Wallet.spend(500, 'torneo')) return false; t.joined = true; this.s.c.tour++; this.ev('tour'); this.check(); this.save(); return true; },
   tourFinish(score) {
     const t = this.tourState(); if (t.done) return t; t.done = true; t.score = score;
-    const better = this.rivals(dayNo()).filter(r => r.score > score).length; t.rank = better + 1;
-    t.prize = [0, 5000, 2500, 1500, 800, 800][t.rank] || 0;
+    const better = (typeof Top !== 'undefined' ? Top.list : []).filter(r => r.id !== Net.id && r.tday === dayNo() && r.tour > score).length; t.rank = better + 1;
+    t.prize = score >= 2000 ? 5000 : score >= 1000 ? 2500 : score >= 600 ? 1500 : score >= 300 ? 800 : 0;
     if (t.prize) Wallet.grant(t.prize, 'torneo'); if (t.rank === 1) this.s.c.tourwin++;
     this.addXp(40 + (t.prize ? 40 : 0)); this.check(); this.save(); return t;
   },
@@ -4581,9 +4589,9 @@ const Hub = {
       body = `<div class="achs">` + ACHS.map(([id, n, d]) => `<div class="ach ${s.ach[id] ? 'on' : ''}"><b>${s.ach[id] ? '🏆' : '🔒'} ${n}</b><small>${d}</small></div>`).join('') + `</div>`;
     } else {
       const kind = this.rk || 'wealth', rows = P.board(kind);
-      body = `<div class="seg" id="rkSeg">${[['wealth', 'Patrimonio'], ['rep', 'Reputación'], ['tour', 'Torneo de hoy']].map(([k, n]) => `<button data-rk="${k}" class="${kind === k ? 'on' : ''}">${n}</button>`).join('')}</div>
-        <div class="board2">` + rows.map((r, i) => `<div class="rk ${r.me ? 'me' : ''}"><i>${i + 1}</i><b>${r.name}${r.me ? '' : ' <em>NPC</em>'}</b><span class="num">${r.txt}</span></div>`).join('') + `</div>
-        <p class="note">Los «Rivales de la casa» son personajes NPC. Con el servidor multijugador esta tabla mostrará a los jugadores reales.</p>`;
+      body = `<div class="seg" id="rkSeg">${[['wealth', 'Patrimonio'], ['rep', 'Reputación'], ['win', 'Mayor premio'], ['tour', 'Torneo de hoy']].map(([k, n]) => `<button data-rk="${k}" class="${kind === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+        <div class="board2">` + rows.map((r, i) => `<div class="rk ${r.me ? 'me' : ''}"><i>${i + 1}</i><b>${esc(r.name)}${r.me ? ' (tú)' : ''}</b><span class="num">${r.txt}</span></div>`).join('') + `</div>
+        <p class="note">${Net.mode === 'online' ? 'Jugadores reales de este servidor. Se guarda y se actualiza solo.' : 'Sin conexión: abre el juego desde la dirección del servidor para ver a los demás jugadores.'}</p>`;
     }
     c.innerHTML = `<h2>${this.desk ? 'Recepción Royale' : 'Tu perfil'}</h2><div class="seg hubtabs">${tabs.map(([k, n]) => `<button data-tab="${k}" class="${this.tab === k ? 'on' : ''}">${n}</button>`).join('')}</div>${body}<div class="acts"><button class="btn primary" id="mOk">Cerrar</button></div>`;
     $('#mOk', c).onclick = () => UI.closeModal();
@@ -4695,8 +4703,8 @@ Games.vpoker = {
     }
     function finishTour() {
       const t = Prog.tourFinish(S.score); S.fin = true;
-      UI.modal(`<h2>Torneo terminado</h2><div class="tierbig" style="--tc:#ffcf5a"><b>Puesto ${t.rank}º de 10</b><span>${S.score} puntos${t.prize ? ' · premio ' + eur(t.prize) : ''}</span></div>
-        <p class="note">${t.prize ? 'Has ganado ' + eur(t.prize) + ' (ya está en tu saldo).' : 'Hoy no has entrado en premios. Mañana hay otro torneo.'} Los rivales son NPC de la casa; con el servidor serán jugadores reales.</p>
+      UI.modal(`<h2>Torneo terminado</h2><div class="tierbig" style="--tc:#ffcf5a"><b>Puesto ${t.rank}º</b><span>${S.score} puntos${t.prize ? ' · premio ' + eur(t.prize) : ''}</span></div>
+        <p class="note">${t.prize ? 'Has ganado ' + eur(t.prize) + ' (ya está en tu saldo).' : 'Hoy no has entrado en premios. Mañana hay otro torneo.'}</p>
         <div class="acts"><button class="btn primary" id="mOk">Genial</button></div>`, c => { $('#mOk', c).onclick = () => { UI.closeModal(); UI.close(true); }; });
       if (t.rank === 1) { Sfx.play('bigwin'); FX.confetti(120); }
     }
@@ -4988,12 +4996,11 @@ function drawTourScreen(g, w, h, t) {
 }
 function tourModal() {
   const t = Prog.tourState(), rows = Prog.board('tour');
-  const list = rows.map((r, i) => `<div class="rk ${r.me ? 'me' : ''}"><i>${i + 1}</i><b>${r.name}${r.me ? '' : ' <em>NPC</em>'}</b><span class="num">${r.txt}</span></div>`).join('');
+  const list = rows.map((r, i) => `<div class="rk ${r.me ? 'me' : ''}"><i>${i + 1}</i><b>${esc(r.name)}${r.me ? ' (tú)' : ''}</b><span class="num">${r.txt}</span></div>`).join('');
   UI.modal(`<h2>Torneo diario de Video Poker</h2>
-    <p>10 manos de Jacks or Better con fichas de torneo (tu saldo no se toca). Gana quien más puntos sume. Inscripción: <b>5 €</b>. Premios: 1º <b>50 €</b> · 2º <b>25 €</b> · 3º <b>15 €</b> · 4º y 5º <b>8 €</b>. Hay un torneo nuevo cada día.</p>
+    <p>10 manos de Jacks or Better con fichas de torneo (tu saldo no se toca). Gana quien más puntos sume. Inscripción: <b>5 €</b>. Premios por puntos: 2.000+ <b>50 €</b> · 1.000+ <b>25 €</b> · 600+ <b>15 €</b> · 300+ <b>8 €</b>. La tabla es de jugadores reales. Hay un torneo nuevo cada día.</p>
     <div class="board2">${list || '<small class="note">Aún no hay resultados hoy.</small>'}</div>
     ${t.done ? `<p class="note">Hoy has quedado ${t.rank}º con ${t.score} puntos${t.prize ? ' y has ganado ' + eur(t.prize) : ''}. Vuelve mañana.</p>` : ''}
-    <p class="note">Los rivales son NPC de la casa; con el servidor serán jugadores reales.</p>
     <div class="acts">${t.done ? '' : '<button class="btn primary" id="mGo">Inscribirme y jugar (5 €)</button>'}<button class="btn" id="mOk">Cerrar</button></div>`, c => {
     c.classList.add('wide'); $('#mOk', c).onclick = () => UI.closeModal();
     const go = $('#mGo', c); if (go) go.onclick = () => { if (!Prog.tourJoin()) return; UI.closeModal(); UI.open('vpoker', { tour: true, title: 'TORNEO DIARIO', sub: '10 manos · fichas de torneo' }); };
@@ -5298,7 +5305,7 @@ const Env = (() => {
       const gl = sm.glow * (1 + .25 * cur.cloud) * (1 - .15 * cur.fog); U.glow.value.set(gl, gl, gl);
       const fc = sm.fog.clone().lerp(c3(0x3a4560), .45 * cur.rain + .2 * cur.cloud).lerp(c3(this.isNight() ? 0x2a3050 : 0xc8d2e0), .8 * cur.fog).multiplyScalar(1 - .35 * cur.rain);
       fc.r += f * .5; fc.g += f * .55; fc.b += f * .7;
-      scene.fog.color.copy(fc); scene.fog.near = mix(sc.fog[1], 7, cur.fog) * (1 - .3 * cur.rain); scene.fog.far = mix(sc.fog[2], 42, cur.fog) * (1 - .35 * cur.rain);
+      scene.fog.color.copy(fc); const vk = viewK(sc); scene.fog.near = mix(sc.fog[1] * vk, 7, cur.fog) * (1 - .3 * cur.rain); scene.fog.far = mix(sc.fog[2] * vk, 42, cur.fog) * (1 - .35 * cur.rain);
       World.three.renderer.setClearColor(fc);
       // lluvia
       if (cur.rain > .03) {
@@ -5480,6 +5487,10 @@ const PLACES = [
   { id: 'avenida', n: 'Avenida Salera', sub: 'Al este de la plaza, siguiendo la calle', x: .7, y: .5, w: [52, 0] },
   { id: 'salera', n: 'Centro comercial Salera', sub: 'fnac, Primor, Foot Locker, Bomboo, Cinesa y Joyería Royale', x: .7, y: .3, w: [72, -12.6] },
   { id: 'h1', n: 'Barrio Residencial', sub: 'Casas en venta y alquiler · al oeste de la plaza', x: .14, y: .5, w: [-70, 0] },
+  { id: 'sur', n: 'Ayuntamiento', sub: 'Elecciones a alcalde · Distrito Sur', x: .42, y: .8, w: [0, 49.5] },
+  { id: 'sur', n: 'Calle del Comercio', sub: 'Negocios en venta · Distrito Sur', x: .42, y: .88, w: [0, 76.5] },
+  { id: 'sur', n: 'Playa del Neón', sub: 'Paseo marítimo y chiringuito', x: .36, y: .96, w: [-14, 107] },
+  { id: 'sur', n: 'Parque Central', sub: 'Lago, columpios y bancos', x: .2, y: .8, w: [-51, 50] },
   { id: null, n: 'Aeropuerto', sub: 'PRÓXIMAMENTE', x: .93, y: .2, soon: true },
   { id: null, n: 'Montañas', sub: 'PRÓXIMAMENTE', x: .1, y: .12, soon: true },
 ];
@@ -5516,7 +5527,7 @@ const Phone = {
   head(t) { return `<div class="ph-head"><button class="ph-back" data-go="home">‹</button><h4>${t}</h4></div>`; },
   go(app) {
     this.app = app; const B = $('#phB'), s = this.st();
-    const apps = [['map', 'Mapa', '🗺️', '#2fbf71'], ['bank', 'Banco', '💳', '#d9a21a'], ['msg', 'Mensajes', '💬', '#1ea0d0'], ['ward', 'Armario', '👕', '#d02a7a'], ['rank', 'Ranking', '🏆', '#e0801a'], ['prof', 'Perfil', '⭐', '#8a3ad0'], ['news', 'Noticias', '📰', '#3a6ad0'], ['emo', 'Gestos', '🕺', '#3aa08a'], ['garage', 'Garaje', '🚗', '#c0392b'], ['race', 'Carreras', '🏁', '#222838'], ['cfg', 'Ajustes', '⚙️', '#5a6070']];
+    const apps = [['map', 'Mapa', '🗺️', '#2fbf71'], ['bank', 'Banco', '💳', '#d9a21a'], ['msg', 'Mensajes', '💬', '#1ea0d0'], ['ward', 'Armario', '👕', '#d02a7a'], ['rank', 'Ranking', '🏆', '#e0801a'], ['prof', 'Perfil', '⭐', '#8a3ad0'], ['news', 'Noticias', '📰', '#3a6ad0'], ['emo', 'Gestos', '🕺', '#3aa08a'], ['garage', 'Garaje', '🚗', '#c0392b'], ['race', 'Carreras', '🏁', '#222838'], ['biz', 'Negocios', '🏪', '#2a9a8a'], ['city', 'Alcaldía', '🏛️', '#6a5acd'], ['cfg', 'Ajustes', '⚙️', '#5a6070']];
     let h = '';
     if (app === 'home') {
       h = `<div class="ph-clock"><b>${Env.timeStr()}</b><span>${World.scene.label} · ${eur(Wallet.cents)}</span></div><div class="ph-grid">` +
@@ -5553,6 +5564,8 @@ const Phone = {
         `<p class="note" style="font-size:11px">Más modelos en la tienda fnac de Salera.</p><button class="btn wide" data-go="gamecfg">Ajustes del juego</button>`;
     } else if (app === 'ward') { this.toggle(false); Style.wardrobe(); return; }
     else if (app === 'rank') { this.toggle(false); Hub.open('rank'); return; }
+    else if (app === 'biz') { this.toggle(false); Biz.panel(); return; }
+    else if (app === 'city') { this.toggle(false); City.modal(); return; }
     else if (app === 'prof') { this.toggle(false); Hub.open('perfil'); return; }
     else if (app === 'gamecfg') { this.toggle(false); UI.settings(); return; }
     B.innerHTML = h; B.scrollTop = 0;
@@ -6029,6 +6042,10 @@ const _receive = Net.receive;
 Net.receive = function (m) {
   if (m && m.t === 'snap') { for (const id of [...this.peers.keys()]) if (!m.list.some(x => x.id === id)) { this.peers.delete(id); Bus.emit('peerLeave', { id }); } for (const x of m.list) _receive.call(this, Object.assign({ t: 'state' }, x)); return; }
   if (m && m.t === 'count') { this.online = m.n; Bus.emit('netcount', m.n); return; }
+  if (m && m.t === 'ver') { // al subir una versión nueva al servidor, todos se recargan solos
+    if (this.ver && this.ver !== m.v) { try { Prog.save(); Vehicles.savePos && Vehicles.savePos(); } catch (e) { } UI.toast('Hay una versión nueva del juego. Recargando…', 'good'); setTimeout(() => location.reload(), 2500); }
+    this.ver = m.v; return;
+  }
   if (m && m.t === 'feed') { Feed.add(m); return; }
   if (m && m.t === 'jx') { JXN.ph = m.ph; JXN.t0 = performance.now() - m.el; JXN.r = m.r; JXN.crash = m.crash || 0; JXN.hist = m.hist || []; JXN.cb && JXN.cb('jx', m); return; }
   if (m && m.t === 'jxb') { JXN.bets = m.list || []; JXN.br = m.r; JXN.cb && JXN.cb('jxb', m); return; }
@@ -6076,11 +6093,11 @@ function makeTag() {
   sp.scale.set(2.6, .853, 1); sp.renderOrder = 10; let last = '';
   return {
     sprite: sp,
-    set(name, cents, game) {
-      const key = name + '|' + cents + '|' + game; if (key === last) return; last = key;
+    set(name, cents, game, mayor) {
+      const key = name + '|' + cents + '|' + game + '|' + mayor; if (key === last) return; last = key;
       g.clearRect(0, 0, 512, 168); g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillStyle = 'rgba(10,6,24,.72)'; const w = 470; g.beginPath(); g.roundRect ? g.roundRect(256 - w / 2, 8, w, 112, 28) : g.rect(256 - w / 2, 8, w, 112); g.fill();
-      g.font = `bold 44px ${FONT_U}`; g.fillStyle = '#ffffff'; g.fillText(String(name).slice(0, 16), 256, 44);
+      g.font = `bold 44px ${FONT_U}`; g.fillStyle = mayor ? '#ffcf5a' : '#ffffff'; g.fillText((mayor ? '👑 ' : '') + String(name).slice(0, 16), 256, 44);
       g.font = `38px ${FONT_D}`; g.fillStyle = '#ffcf5a'; g.fillText(fmt(cents || 0), 256, 92);
       if (game && Games[game]) { const t = (game === 'burger' ? 'Trabajando' : 'Jugando') + ' · ' + gameName(game); g.font = `bold 28px ${FONT_U}`; const tw = g.measureText(t).width + 40; g.fillStyle = 'rgba(255,61,154,.85)'; g.beginPath(); g.roundRect ? g.roundRect(256 - tw / 2, 124, tw, 40, 20) : g.rect(256 - tw / 2, 124, tw, 40); g.fill(); g.fillStyle = '#fff'; g.fillText(t, 256, 145); }
       tex.needsUpdate = true;
@@ -6274,6 +6291,267 @@ const Homes = {
 };
 ACHS.push(['home1', 'Propietario', 'Compra tu primera casa', () => Homes.count() >= 1], ['home5', 'Decorador', 'Compra 5 muebles', () => Homes.furnCount() >= 5]);
 
+/* ---- 22_city.js ---- */
+/* =====================================================================
+   DISTRITO SUR — Ayuntamiento (elecciones a alcalde), Calle del Comercio
+   (negocios que dan dinero), Parque Central, paseo marítimo y playa.
+   Se llega caminando por las calles laterales de la plaza, hacia el sur.
+   También: ranking de jugadores reales (Top) y alcaldía (City).
+   ===================================================================== */
+
+/* ---------------- Ranking real ---------------- */
+const Top = {
+  list: Store.get('topcache', []),
+  set(l) { this.list = l || []; Store.set('topcache', this.list.slice().sort((a, b) => b.net - a.net).slice(0, 100)); Bus.emit('top'); },
+  me() { const t = Prog.s.tour; return { t: 'stats', net: Prog.net(), lvl: Prog.lvl(), best: Wallet.stats.best || 0, tour: t.day === dayNo() && t.done ? t.score : -1, tday: dayNo() }; },
+  send(force) { if (Net.mode !== 'online') return; const m = this.me(), k = JSON.stringify(m); if (!force && k === this.lastK) return; this.lastK = k; Net.transport.send(m); },
+};
+
+/* ---------------- Alcaldía ---------------- */
+const BONUS_TXT = { wage: 'Sueldos de BURGER BOOM +50 %', biz: 'Ingresos de negocios +25 %', xp: 'Reputación ganada +25 %' };
+const City = {
+  mayor: Store.get('mayorcache', null), el: null,
+  bonus(k) { return !!(this.mayor && this.mayor.bonus === k); },
+  isMe() { return !!(this.mayor && this.mayor.id === Net.id); },
+  set(m) {
+    this.mayor = m.mayor; this.el = m.el; this.elAt = performance.now(); Store.set('mayorcache', this.mayor);
+    if (this.plaque) this.drawPlaque(); Bus.emit('city');
+    if (this.modalOpen) this.draw(this.modalOpen);
+  },
+  left() { return this.el ? Math.max(0, this.el.left - (performance.now() - this.elAt)) : 0; },
+  drawPlaque() {
+    const { cv, tex } = this.plaque, g = cv.getContext('2d'); g.fillStyle = '#1a1420'; g.fillRect(0, 0, 512, 128); g.strokeStyle = '#c89a3a'; g.lineWidth = 6; g.strokeRect(5, 5, 502, 118);
+    g.textAlign = 'center'; g.fillStyle = '#ffcf5a'; g.font = `30px ${FONT_D}`; g.fillText('ALCALDE DE LA CIUDAD', 256, 44);
+    g.fillStyle = '#fff'; g.font = `bold 40px ${FONT_U}`; g.fillText(this.mayor ? '👑 ' + this.mayor.n : 'Sin alcalde · ¡preséntate!', 256, 96); tex.needsUpdate = true;
+  },
+  modal() {
+    UI.modal('', c => { this.modalOpen = c; this.draw(c); }); $('#modal').classList.add('right');
+    UI.onClose = () => { this.modalOpen = null; };
+  },
+  draw(c) {
+    if (!c.isConnected) { this.modalOpen = null; return; }
+    const on = Net.mode === 'online', e = this.el, m = this.mayor, mins = Math.ceil(this.left() / 60000);
+    const myVote = e && e.voted ? e.voted[Net.id] : null, running = e && e.cands.some(x => x.id === Net.id);
+    c.innerHTML = `<h2>Ayuntamiento</h2>
+      <div class="hm-row"><span>Alcalde actual</span><b>${m ? '👑 ' + esc(m.n) : 'Nadie todavía'}</b></div>
+      ${m ? `<div class="hm-row"><span>Lema</span><b>«${esc(m.slogan)}»</b></div><div class="hm-row"><span>Ventaja para toda la ciudad</span><b>${BONUS_TXT[m.bonus]}</b></div>` : ''}
+      ${!on ? '<p class="note">Las elecciones son entre jugadores reales. Abre el juego desde la dirección del servidor para votar o presentarte.</p>' : `
+      <h3 style="margin:14px 0 4px">Elecciones · cierran en ${mins} min</h3>
+      <div class="hm-list">${e.cands.length ? e.cands.slice().sort((a, b) => b.v - a.v).map(x => `<div class="hm-row"><span><b>${esc(x.n)}</b><br><small style="color:var(--muted)">«${esc(x.slogan)}» · ${BONUS_TXT[x.bonus]}</small></span><span>${x.v} voto${x.v === 1 ? '' : 's'} ${myVote === x.id ? '<span class="tag ok">Tu voto</span>' : `<button class="btn sm primary" data-vote="${x.id}">Votar</button>`}</span></div>`).join('') : '<p class="note">Aún no hay candidatos. ¡Sé el primero!</p>'}</div>
+      ${running ? '<p class="note">Ya eres candidato en estas elecciones. ¡Pide el voto a los demás!</p>' : `
+      <h3 style="margin:14px 0 4px">Presentarte (100 €)</h3>
+      <input id="slg" maxlength="40" placeholder="Tu lema de campaña" style="width:100%;padding:9px;border-radius:9px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:#fff">
+      <div class="seg" id="bnSeg" style="margin:8px 0">${Object.entries(BONUS_TXT).map(([k, t], i) => `<button data-b="${k}" class="${i ? '' : 'on'}">${t}</button>`).join('')}</div>
+      <button class="btn primary" id="runB" ${Wallet.cents < 10000 ? 'disabled' : ''}>Presentarme · 100 €</button>`}
+      ${this.isMe() ? `<h3 style="margin:14px 0 4px">Eres el alcalde</h3><p class="note">Cobras 200 € cada 10 minutos de juego. Puedes cambiar la ventaja de la ciudad:</p><div class="seg" id="mySeg">${Object.entries(BONUS_TXT).map(([k, t]) => `<button data-mb="${k}" class="${m.bonus === k ? 'on' : ''}">${t}</button>`).join('')}</div>` : ''}`}
+      <p class="note">Cada elección dura 30 minutos. Gana quien tenga más votos y su ventaja se aplica a todos los jugadores. Un voto por jugador.</p>
+      <div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
+    c.querySelector('#mOk').onclick = () => UI.closeModal();
+    const slg = c.querySelector('#slg'); if (slg) slg.addEventListener('keydown', ev => ev.stopPropagation());
+    let bonus = 'wage';
+    $$('#bnSeg button', c).forEach(b => b.onclick = () => { $$('#bnSeg button', c).forEach(x => x.classList.remove('on')); b.classList.add('on'); bonus = b.dataset.b; });
+    $$('[data-vote]', c).forEach(b => b.onclick = () => { Net.transport.send({ t: 'vote', id: b.dataset.vote }); Sfx.play('chip'); UI.toast('¡Voto enviado!', 'good'); });
+    $$('[data-mb]', c).forEach(b => b.onclick = () => { Net.transport.send({ t: 'mayorset', bonus: b.dataset.mb }); Sfx.play('chip'); });
+    const rb = c.querySelector('#runB'); if (rb) rb.onclick = () => { if (!Wallet.spend(10000, 'Campaña electoral')) return; Net.transport.send({ t: 'run', slogan: slg.value, bonus }); UI.toast('¡Ya eres candidato!', 'good'); Sfx.play('win'); };
+  },
+};
+
+/* ---------------- Negocios ---------------- */
+const BIZ = [
+  { id: 'kiosk', n: 'Kiosco Neón', d: 'Prensa, chuches y recargas', p: 150000, r: 18000, col: '#ffcf5a' },
+  { id: 'cafe', n: 'Cafetería Brisa', d: 'Cafés y bocadillos', p: 800000, r: 80000, col: '#3df58a' },
+  { id: 'phones', n: 'Tienda Móvil Pro', d: 'Fundas, cargadores y reparaciones', p: 2500000, r: 220000, col: '#3ff2ff' },
+  { id: 'club', n: 'Discoteca Pulse', d: 'La noche más brillante de la ciudad', p: 15000000, r: 1150000, col: '#ff3d9a' },
+  { id: 'bowling', n: 'Bolera Strike', d: 'Pistas, recreativos y batidos', p: 9000000, r: 720000, col: '#b45cff' },
+  { id: 'gym', n: 'Gimnasio Titán', d: 'Pesas, clases y zumos', p: 6000000, r: 480000, col: '#ff8a2a' },
+  { id: 'wash', n: 'Lavado Turbo', d: 'Túnel de lavado y encerado', p: 4500000, r: 370000, col: '#5cb8ff' },
+  { id: 'beach', n: 'Chiringuito Ola', d: 'Bebidas frías en la playa', p: 2000000, r: 175000, col: '#ffe08a' },
+];
+const BIZ_CAP_H = 8, EMP_MAX = 5;
+const Biz = {
+  st() { const s = Prog.s; if (!s.biz) s.biz = {}; return s.biz; },
+  rate(b) { const o = this.st()[b.id]; if (!o) return 0; return Math.round(b.r * (1 + .25 * o.emp) * (City.bonus('biz') ? 1.25 : 1)); },
+  /** Acumula lo ganado desde la última vez (también con el juego cerrado, hasta 8 horas) */
+  tick() { const now = Date.now(); for (const b of BIZ) { const o = this.st()[b.id]; if (!o) continue; const cap = this.rate(b) * BIZ_CAP_H; o.bank = Math.min(cap, (o.bank || 0) + this.rate(b) * Math.max(0, now - o.last) / 36e5); o.last = now; } },
+  pending() { this.tick(); let v = 0; for (const b of BIZ) { const o = this.st()[b.id]; if (o) v += Math.floor(o.bank); } return v; },
+  empCost(b, n) { return Math.round(b.p * .2 * n); },
+  assets() { let v = 0; for (const b of BIZ) { const o = this.st()[b.id]; if (!o) continue; v += b.p; for (let i = 1; i <= o.emp; i++) v += this.empCost(b, i) * .5; } return v; },
+  count() { return Object.keys(this.st()).length; },
+  collect(b) { this.tick(); const o = this.st()[b.id], v = Math.floor(o.bank); if (v <= 0) return 0; o.bank -= v; Wallet.earn(v, 'negocio'); Prog.save(); return v; },
+  collectAll() { let v = 0; for (const b of BIZ) if (this.st()[b.id]) v += this.collect(b); if (v) { UI.toast('Has cobrado ' + fmt(v) + ' de tus negocios', 'good'); FX.coins(null, 20); FX.float(null, '+' + fmt(v), '#9dffc4', 40); } else UI.toast('Tus negocios aún no han generado nada nuevo', ''); return v; },
+  open(id) {
+    const b = BIZ.find(x => x.id === id);
+    const draw = c => {
+      this.tick(); const o = this.st()[b.id];
+      c.innerHTML = `<h2>${b.n}</h2><p style="color:var(--muted);margin:0 0 10px">${b.d}</p>` + (o ? `
+        <div class="hm-row"><span>Ingresos</span><b>${fmt(this.rate(b))} / hora</b></div>
+        <div class="hm-row"><span>En caja (máx. ${BIZ_CAP_H} h)</span><b class="num" id="bk">${fmt(Math.floor(o.bank))}</b></div>
+        <div class="hm-row"><span>Empleados</span><b>${o.emp} / ${EMP_MAX} · cada uno +25 %</b></div>
+        <div class="hm-act"><button class="btn primary" data-col>Cobrar caja</button>${o.emp < EMP_MAX ? `<button class="btn" data-emp ${Wallet.cents < this.empCost(b, o.emp + 1) ? 'disabled' : ''}>Contratar empleado · ${fmt(this.empCost(b, o.emp + 1))}</button>` : ''}<button class="btn danger" data-sell>Vender · ${fmt(Math.round(b.p * .6))}</button></div>
+        <p class="note">El negocio gana dinero aunque no estés jugando (hasta ${BIZ_CAP_H} horas). Cobra la caja aquí o desde la app Negocios del móvil.${City.bonus('biz') ? ' El alcalde da +25 % a todos los negocios.' : ''}</p>` : `
+        <div class="hm-row"><span>Precio</span><b>${fmt(b.p)}</b></div><div class="hm-row"><span>Gana</span><b>${fmt(b.r)} / hora</b></div>
+        <div class="hm-act"><button class="btn primary" data-buy ${Wallet.cents < b.p ? 'disabled' : ''}>Comprar ${fmt(b.p)}</button></div>
+        <p class="note">Se paga solo en unas ${Math.round(b.p / b.r)} horas. Con empleados gana más.</p>`) + `<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
+      c.querySelector('#mOk').onclick = () => UI.closeModal();
+      const q = s => c.querySelector(s);
+      q('[data-buy]') && (q('[data-buy]').onclick = () => { if (!Wallet.spend(b.p, b.n)) return; this.st()[b.id] = { emp: 0, last: Date.now(), bank: 0 }; Prog.save(); Prog.check(); Prog.render(); UI.toast('¡' + b.n + ' es tuyo!', 'good'); Sfx.play('win'); FX.confetti(60); draw(c); });
+      q('[data-col]') && (q('[data-col]').onclick = () => { const v = this.collect(b); if (v) { FX.coins(q('[data-col]'), 18); FX.float(q('[data-col]'), '+' + fmt(v), '#9dffc4', 38); } draw(c); });
+      q('[data-emp]') && (q('[data-emp]').onclick = () => { const o = this.st()[b.id]; if (!Wallet.spend(this.empCost(b, o.emp + 1), b.n)) return; this.tick(); o.emp++; Prog.save(); Sfx.play('chip'); draw(c); });
+      q('[data-sell]') && (q('[data-sell]').onclick = () => { this.collect(b); delete this.st()[b.id]; Wallet.grant(Math.round(b.p * .6), 'Venta de ' + b.n); Prog.save(); Prog.render(); draw(c); });
+    };
+    UI.modal('', draw); $('#modal').classList.add('right');
+  },
+  panel() {
+    const draw = c => {
+      this.tick(); const mine = BIZ.filter(b => this.st()[b.id]);
+      c.innerHTML = `<h2>Mis negocios</h2>` + (mine.length ? mine.map(b => `<div class="hm-row"><span>${b.n}<br><small style="color:var(--muted)">${fmt(this.rate(b))}/h · ${this.st()[b.id].emp} empleados</small></span><b class="num">${fmt(Math.floor(this.st()[b.id].bank))}</b></div>`).join('') + `<div class="hm-act"><button class="btn primary" data-all>Cobrar todo</button></div>`
+        : '<p class="note">Aún no tienes negocios. Están en la Calle del Comercio y la playa, en el Distrito Sur (bajando por las calles laterales de la plaza).</p>') + `<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`;
+      c.querySelector('#mOk').onclick = () => UI.closeModal();
+      const a = c.querySelector('[data-all]'); a && (a.onclick = () => { this.collectAll(); draw(c); });
+    };
+    UI.modal('', draw);
+  },
+};
+ACHS.push(['biz1', 'Empresario', 'Compra tu primer negocio', () => Biz.count() >= 1], ['biz4', 'Magnate', 'Ten 4 negocios a la vez', () => Biz.count() >= 4], ['mayor', 'Alcalde', 'Gana unas elecciones', () => City.isMe()]);
+
+/* Ventajas del alcalde para todos y sueldo del alcalde */
+{ const _earn = Wallet.earn; Wallet.earn = function (c, src) { if (src === 'burger' && City.bonus('wage')) c = Math.round(c * 1.5); return _earn.call(this, c, src); }; }
+{ const _xp = Prog.addXp; Prog.addXp = function (n, capped) { if (City.bonus('xp')) n = Math.round(n * 1.25); return _xp.call(this, n, capped); }; }
+setInterval(() => { if (City.isMe() && Net.mode === 'online' && document.visibilityState === 'visible') { Wallet.grant(20000, 'Sueldo de alcalde'); UI.toast('👑 Sueldo de alcalde: +200,00 €', 'good'); } }, 600000);
+
+/* Mensajes del servidor */
+{
+  const _r = Net.receive;
+  Net.receive = function (m) {
+    if (m && m.t === 'top') { Top.set(m.list); return; }
+    if (m && m.t === 'city') { City.set(m); return; }
+    if (m && m.t === 'mayornew') { UI.toast('👑 ¡' + m.n + ' es el nuevo alcalde de la ciudad!', 'good'); Sfx.play('bigwin'); return; }
+    return _r.call(this, m);
+  };
+  Bus.on('net', on => { if (!on) return; Net.transport.send({ t: 'seed', list: Top.list }); Top.send(true); });
+  setInterval(() => Top.send(false), 15000);
+  Bus.on('wallet', () => { clearTimeout(Top.tm); Top.tm = setTimeout(() => Top.send(false), 3000); });
+}
+
+/* ---------------- El distrito ---------------- */
+function buildSur() {
+  const sc = { label: 'DISTRITO SUR', music: 'city', group: new THREE.Group(), colliders: [], circles: [], interact: [], anims: [], lights: [], walls: null,
+    cam: { pitch: .4, dist: 8.5, min: 4, max: 15 }, camCollide: true, fog: [0x1a1236, 40, 165], outdoor: true,
+    bounds: { x0: -61.5, x1: 39.6, z0: 33.6, z1: 126 }, spawn: { x: 34, z: 40, yaw: Math.PI, ry: 0 } };
+  const LAMPS = []; for (let x = -54; x <= 30; x += 12) LAMPS.push([x, 65.4], [x, 76.6]); for (let x = -56; x <= 36; x += 14) LAMPS.push([x, 104.6]); for (let z = 40; z <= 100; z += 12) LAMPS.push([-28.4, z], [28.4, z]);
+  return buildFloor({
+    extend: sc, ox: 0, oz: 0, amb: [Bake.sky, Bake.gnd, Bake.dirC],
+    lights: lt => {
+      for (const [x, z] of LAMPS) lt(x, 6, z, '#ffb870', 11, 1.05);
+      lt(0, 6, 49, '#ffe8c0', 16, 1.4); lt(0, 3, 56, '#3ff2ff', 9, 1); lt(-18.5, 4, 76, '#ffcf5a', 8, 1); lt(0, 4, 76, '#3df58a', 8, 1); lt(18.5, 4, 76, '#3ff2ff', 8, 1);
+      lt(-18.5, 4, 103.5, '#ff3d9a', 9, 1.1); lt(0, 4, 103.5, '#b45cff', 9, 1); lt(18.5, 4, 103.5, '#ff8a2a', 8, 1); lt(-51, 4, 77, '#5cb8ff', 9, 1); lt(-14, 4, 110.5, '#ffe08a', 8, 1); lt(20, 6, 58, '#ffcf5a', 7, .8);
+    },
+  }, k => {
+    const { G, gl1, gl3, gl8 } = k, C = sc.colliders, CI = sc.circles;
+    const box = (x0, z0, x1, z1, h) => C.push({ x0, x1, z0, z1, h });
+    // ---- suelo ----
+    G.floor(-62, 33.6, 40, 104, .012, '#4a4456', true);
+    for (const [x0, x1] of [[-39, -29], [29, 39]]) G.floor(x0, 33.6, x1, 104, .016, '#25222f', true);
+    G.floor(-62, 66, 40, 76, .017, '#25222f', true);
+    for (let x = -60; x < 38; x += 6) G.floor(x, 70.93, x + 3, 71.07, .02, '#e8e8e8', false);
+    for (const sx of [-34, 34]) for (let z = 36; z < 102; z += 6) if (z < 64 || z > 78) G.floor(sx - .07, z, sx + .07, z + 3, .02, '#e8e8e8', false);
+    for (const sx of [-34, 34]) for (const zz of [62.6, 77.4]) for (let x = sx - 4.5; x < sx + 4.5; x += 1) G.floor(x, zz, x + .5, zz + 2, .021, '#f2f2f2', false);
+    for (const xx of [-26, 26]) for (let z = 66.5; z < 76; z += 1) G.floor(xx - 2, z, xx + 2, z + .5, .021, '#f2f2f2', false);
+    G.floor(-62, 104, 40, 110, .014, '#c8b8a0', true); G.floor(-62, 110, 40, 128, .013, '#e0c890', true);
+    for (let x = -62; x < 40; x += 2) G.floor(x, 109.8, x + 1, 110, .02, '#a89878', false);
+    // mar (las olas se mueven)
+    { const wt = ctex(256, 256, g => { g.fillStyle = '#123a5a'; g.fillRect(0, 0, 256, 256); for (let i = 0; i < 90; i++) { g.strokeStyle = `rgba(${160 + Math.random() * 80},${210 + Math.random() * 40},255,${.15 + Math.random() * .3})`; g.lineWidth = 2; const y = Math.random() * 256, x = Math.random() * 256; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 14, y - 6, x + 28, y); g.stroke(); } }, { repeat: [24, 10] }).tex;
+      const sea = new THREE.Mesh(new THREE.PlaneGeometry(700, 280), new THREE.MeshBasicMaterial({ map: wt })); sea.rotation.x = -Math.PI / 2; sea.position.set(-10, -.02, 127 + 140); sc.group.add(sea);
+      G.floor(-62, 126, 40, 128.5, .03, '#f4f4f4', true); k.upd.push((dt, t) => { wt.offset.y = t * .015; wt.offset.x = Math.sin(t * .3) * .05; }); }
+    // farolas
+    for (const [x, z] of LAMPS) { G.cyl(x, 0, z, .1, 6, 6, '#2a2a34'); G.box(x - .22, 5.75, z - .2, x + .22, 5.95, z + .2, '#2a2a34', { bottom: '#fff2d0', bottomLit: false }); gl3.add(x, 5.65, z, '#ffc880', .9); CI.push({ x, z, r: .2 }); }
+    const tree = (x, z, s = 1) => { G.cyl(x, 0, z, .14 * s, 2.4 * s, 6, '#4a3020'); G.cyl(x, 2.1 * s, z, 1.35 * s, 1.3 * s, 7, '#1f5a34', { r2: 1.05 * s, topColor: '#2a7040' }); G.cyl(x, 3.4 * s, z, 1.05 * s, 1.2 * s, 7, '#247040', { r2: .25 * s }); CI.push({ x, z, r: .3 * s }); };
+    const bench = (x, z, ry) => { G.setXf(x, 0, z, ry); G.box(-.9, .4, -.25, .9, .5, .25, '#8a5a34'); G.box(-.9, .5, .15, .9, .95, .25, '#8a5a34'); G.box(-.85, 0, -.2, -.75, .4, .2, '#2a2a33'); G.box(.75, 0, -.2, .85, .4, .2, '#2a2a33'); G.setXf(0, 0, 0, 0); CI.push({ x, z, r: .6 }); };
+
+    // ---- AYUNTAMIENTO ----
+    G.floor(-26, 47, 26, 64, .02, '#b8b0a4', true);
+    for (let x = -26; x < 26; x += 2) for (let z = 47; z < 64; z += 2) if (((x + z) / 2) & 1) G.floor(x, z, x + 2, z + 2, .022, '#aaa296', true);
+    G.box(-14, 0, 37, 14, 9, 46, '#e8e0d0', { top: '#b8ae9c' }); box(-14, 37, 14, 46, 9);
+    G.box(-15, 9, 36.5, 15, 9.6, 46.6, '#f2ece0'); G.box(-6, 9.6, 41, 6, 12.5, 46.3, '#e8e0d0'); G.box(-6.4, 12.5, 40.6, 6.4, 13, 46.6, '#f2ece0');
+    for (let i = 0; i < 4; i++) G.box(-9 + i * .3, i * .15, 46 + i * .5, 9 - i * .3, (i + 1) * .15, 46.5 + i * .5, '#f4f0e8');
+    for (const x of [-7.5, -4.5, -1.5, 1.5, 4.5, 7.5]) { G.cyl(x, .6, 46.6, .38, 8.4, 10, '#f6f2ea'); CI.push({ x, z: 46.6, r: .45 }); }
+    G.box(-1.6, .6, 45.95, 1.6, 4.4, 46.05, '#3a2418', { faces: 's' }); gl3.add(0, 4.8, 46.3, '#ffe8c0', .9);
+    for (let row = 0; row < 2; row++) for (const x of [-12, -9.5, 9.5, 12]) G.rect('s', 46.01, x - .7, x + .7, 2 + row * 3.4, 4 + row * 3.4, '#ffe2a8', false, .02);
+    k.sign('AYUNTAMIENTO', '#ffcf5a', 7, [0, 10.9, 46.65], 0, null, .35);
+    { const t = ctex(128, 128, g => { g.fillStyle = '#f4f0e8'; g.beginPath(); g.arc(64, 64, 60, 0, TAU); g.fill(); g.strokeStyle = '#2a2a33'; g.lineWidth = 5; g.stroke(); g.lineWidth = 6; g.beginPath(); g.moveTo(64, 64); g.lineTo(64, 24); g.moveTo(64, 64); g.lineTo(92, 70); g.stroke(); }).tex; const p = plane(2, 2, t, { transparent: true }); p.position.set(0, 11.6, 46.35); sc.group.add(p); }
+    G.cyl(13, 0, 48.6, .08, 9, 6, '#d8d8e0'); { const fl = plane(2, 1.2, ctex(128, 80, g => { g.fillStyle = '#c8102e'; g.fillRect(0, 0, 128, 80); g.fillStyle = '#ffcf3a'; g.fillRect(0, 27, 128, 26); g.fillStyle = '#ff3d9a'; g.font = `bold 30px ${FONT_D}`; g.textAlign = 'center'; g.fillText('★', 64, 52); }).tex, { double: true }); fl.position.set(14.05, 8.2, 48.6); sc.group.add(fl); k.upd.push((dt, t) => { fl.rotation.y = Math.sin(t * 2.2) * .25; }); }
+    // placa con el alcalde
+    { const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128; const tex = new THREE.CanvasTexture(cv); const p = plane(4.2, 1.05, tex); p.position.set(0, 5.2, 46.08); sc.group.add(p); City.plaque = { cv, tex }; City.drawPlaque(); }
+    sc.interact.push({ x: 0, z: 49.2, r: 2.4, label: 'Ayuntamiento', get sub() { return City.mayor ? 'Alcalde: ' + City.mayor.n + ' · elecciones y votaciones' : 'Elecciones a alcalde · ¡preséntate!'; }, fn: () => City.modal() });
+    // fuente
+    G.cyl(0, 0, 56, 3.2, .6, 20, '#d8d0c4', { topColor: '#2a6a9a' }); G.cyl(0, .6, 56, .5, 1.6, 10, '#d8d0c4'); G.cyl(0, 2.2, 56, 1.2, .25, 14, '#d8d0c4', { topColor: '#3a8aca' }); gl8.add(0, 2.8, 56, '#3ff2ff', .5); CI.push({ x: 0, z: 56, r: 3.3 });
+    { const jet = new Glows(1.2); for (let i = 0; i < 24; i++) jet.add(0, 0, 0, '#bfe8ff', .4); const pts = jet.build(); sc.group.add(pts); const P = pts.geometry.attributes.position;
+      k.upd.push((dt, t) => { for (let i = 0; i < 24; i++) { const a = i / 24 * TAU, f = ((t * .9 + i / 24) % 1); P.setXYZ(i, Math.cos(a) * f * 2.4, 2.4 + Math.sin(f * Math.PI) * 1.4, 56 + Math.sin(a) * f * 2.4); } P.needsUpdate = true; }); }
+    for (const [x, z, ry] of [[-6, 51, 0], [6, 51, 0], [-6, 61, Math.PI], [6, 61, Math.PI], [-12, 56, Math.PI / 2], [12, 56, -Math.PI / 2]]) bench(x, z, ry);
+    for (const [x, z] of [[-22, 50], [-22, 60], [22, 50], [22, 62], [-15, 63], [15, 63]]) tree(x, z);
+    // panel del TOP de la ciudad
+    G.box(18.6, 0, 57.6, 21.4, .3, 58.4, '#2a2a33'); G.box(19.85, .3, 57.9, 20.15, 2.2, 58.1, '#2a2a33'); box(18.6, 57.6, 21.4, 58.4, 4);
+    k.screen(4.4, 2.6, [20, 3.4, 58.42], 0, (g, w, h) => {
+      g.fillStyle = '#080614'; g.fillRect(0, 0, w, h); neonText(g, 'TOP DE LA CIUDAD', w / 2, h * .12, h * .1, '#fff', '#ffcf5a');
+      const rows = Prog.board('wealth').slice(0, 6); g.textBaseline = 'middle';
+      rows.forEach((r, i) => { const y = h * .28 + i * h * .12; g.fillStyle = r.me ? 'rgba(255,207,90,.25)' : 'rgba(255,255,255,.06)'; g.fillRect(w * .05, y - h * .05, w * .9, h * .1); g.textAlign = 'left'; g.fillStyle = '#ffcf5a'; g.font = `${h * .07}px ${FONT_D}`; g.fillText(i + 1, w * .07, y); g.fillStyle = '#fff'; g.font = `600 ${h * .065}px ${FONT_U}`; g.fillText(String(r.name).slice(0, 16), w * .15, y); g.textAlign = 'right'; g.fillStyle = '#9dffc4'; g.fillText(r.txt, w * .93, y); });
+      if (!rows.length || Net.mode !== 'online') { g.textAlign = 'center'; g.fillStyle = '#9a8fb8'; g.font = `${h * .055}px ${FONT_U}`; g.fillText('Conéctate al servidor para ver a los demás', w / 2, h * .94); }
+    }, 3);
+    sc.interact.push({ x: 20, z: 60, r: 2, label: 'Top de la ciudad', sub: 'Ranking de jugadores reales', fn: () => Hub.open('rank') });
+
+    // ---- PARQUE CENTRAL (oeste) ----
+    G.floor(-61.5, 36, -41, 64, .02, '#2f6a3a', true); G.floor(-52, 36, -50, 64, .024, '#c8b8a0', true); G.floor(-61.5, 49, -41, 51, .024, '#c8b8a0', true);
+    G.cyl(-56, 0, 43, 3.4, .25, 18, '#5a8aaa', { topColor: '#2a6aaa' }); CI.push({ x: -56, z: 43, r: 3.4 });
+    for (const [x, z] of [[-45, 40], [-45, 46], [-58, 56], [-45, 58], [-58, 62], [-46, 62], [-60, 38]]) tree(x, z, 1.15);
+    for (const [x, z, ry] of [[-48.6, 44, -Math.PI / 2], [-48.6, 56, -Math.PI / 2], [-53.4, 58, Math.PI / 2]]) bench(x, z, ry);
+    // columpios
+    G.box(-57.5, 0, 52.6, -57.3, 2.6, 52.8, '#c8102e'); G.box(-54.7, 0, 52.6, -54.5, 2.6, 52.8, '#c8102e'); G.box(-57.5, 2.6, 52.6, -54.5, 2.8, 52.8, '#c8102e'); G.box(-56.6, .5, 52.4, -55.4, .6, 53, '#ffcf3a'); box(-57.6, 52.4, -54.4, 53, 3);
+    k.sign('PARQUE CENTRAL', '#3df58a', 4, [-46, 3, 64.2], 0);
+    // bloques de fondo a los lados del parque (este de la calle lateral)
+    G.box(-41, 0, 78, -39.4, .4, 102, '#4a4452');
+
+    // ---- CALLE DEL COMERCIO: negocios ----
+    const shop = (id, x0, x1, zf, dir, h, col) => {
+      const b = BIZ.find(x => x.id === id), cx = (x0 + x1) / 2, zb0 = dir < 0 ? zf : zf - 11, zb1 = dir < 0 ? zf + 11 : zf, face = dir < 0 ? 'n' : 's';
+      G.box(x0, 0, zb0, x1, h, zb1, col, { top: '#2a2838' }); box(x0, zb0, x1, zb1, h);
+      G.rect(face, zf, x0 + .8, cx - 1.4, .5, 3.1, '#ffe8b8', false, .02); G.rect(face, zf, cx + 1.4, x1 - .8, .5, 3.1, '#ffe8b8', false, .02); G.rect(face, zf, cx - 1.1, cx + 1.1, 0, 2.9, '#1a1418', false, .025);
+      for (let i = 0; i < 3; i++) G.rect(face, zf, x0 + 1 + i * (x1 - x0 - 2) / 3, x0 + 1 + i * (x1 - x0 - 2) / 3 + 1.6, 4.4, 5.6, '#ffd89a', false, .02);
+      const za = zf + dir * 1.5; G.box(x0 + .4, 3.3, Math.min(zf, za), x1 - .4, 3.5, Math.max(zf, za), b.col);
+      for (let x = x0 + .6; x < x1 - .4; x += .9) gl1.add(x, 3.28, za, b.col, .3);
+      k.sign(b.n.toUpperCase(), b.col, Math.min(8, x1 - x0 - 2), [cx, h - 1.3 > 4.2 ? 4.2 : h - .8, zf + dir * .07], dir < 0 ? Math.PI : 0, null, .4);
+      gl8.add(cx, 3, zf + dir * 1.2, b.col, .3);
+      sc.interact.push({ x: cx, z: zf + dir * 2, r: 2.2, get label() { return b.n; }, get sub() { const o = Biz.st()[b.id]; return o ? 'Tu negocio · ' + fmt(Biz.rate(b)) + '/h · caja ' + fmt(Math.floor((Biz.tick(), o.bank))) : 'En venta · ' + fmt(b.p) + ' · gana ' + fmt(b.r) + '/h'; }, fn: () => Biz.open(b.id) });
+    };
+    shop('kiosk', -27, -10, 78, -1, 5.2, '#4a3a5a'); shop('cafe', -8, 8, 78, -1, 6, '#5a4a3a'); shop('phones', 10, 27, 78, -1, 7, '#2a3a5a');
+    shop('club', -27, -10, 102, 1, 8, '#1e1428'); shop('bowling', -8, 8, 102, 1, 6.6, '#2a2050'); shop('gym', 10, 27, 102, 1, 6, '#3a2a24');
+    // lavado (oeste) con su explanada
+    shop('wash', -60, -43, 86, -1, 5.4, '#24384a'); G.floor(-60, 78, -43, 86, .022, '#6a6478', true); for (let x = -58; x < -44; x += 3) G.floor(x, 79, x + .15, 85, .025, '#f2f2f2', false);
+    addCarGeo(G, -55, 82, Math.PI / 2, '#c0392b', false); addCarGeo(G, -49, 82, Math.PI / 2, '#2c3e50', false); box(-56.2, 80.9, -53.8, 83.1, 1.5); box(-50.2, 80.9, -47.8, 83.1, 1.5);
+    // ---- PASEO Y PLAYA ----
+    for (let x = -60; x < 39; x += 1.6) G.box(x, 0, 109.85, x + .1, .9, 110, '#e8e4dc');
+    G.box(-62, .85, 109.8, 40, .95, 110.05, '#e8e4dc');
+    for (const x of [-48, -30, 6, 24]) { palm(G, x, 107, 4.4, 0, 0); CI.push({ x, z: 107, r: .4 }); }
+    for (const [x, z, ry] of [[-40, 106, 0], [-20, 106, 0], [14, 106, 0], [32, 106, 0]]) bench(x, z, ry);
+    for (const [x, z, c] of [[-44, 118, '#ff3d9a'], [-30, 121, '#3ff2ff'], [2, 117, '#ffcf3a'], [16, 121, '#3df58a'], [28, 116, '#ff8a2a']]) { G.cyl(x, 0, z, .05, 2.4, 6, '#ddd'); G.cyl(x, 2.1, z, 1.5, .4, 10, c, { r2: .1 }); G.floor(x + .6, z - .5, x + 2.4, z + .5, .03, c, true); CI.push({ x, z, r: .2 }); }
+    // chiringuito
+    shop('beach', -22, -6, 112, -1, 4, '#a07a4a'); G.box(-22.4, 4, 111.6, -5.6, 4.4, 123.4, '#d8c8a0');
+    // socorrista
+    for (const [dx, dz] of [[-.8, -.8], [.8, -.8], [-.8, .8], [.8, .8]]) G.box(10 + dx - .08, 0, 116 + dz - .08, 10 + dx + .08, 2.6, 116 + dz + .08, '#e8e4dc');
+    G.box(9, 2.6, 115, 11, 2.8, 117, '#c8102e'); G.box(9.1, 2.8, 115.1, 10.9, 4, 115.25, '#c8102e'); box(9, 115, 11, 117, 4);
+    k.sign('PLAYA DEL NEÓN', '#3ff2ff', 4.2, [-36, 3.2, 104.2], 0); G.box(-36.1, 0, 104.1, -35.9, 2.7, 104.3, '#2a2a33');
+    k.sign('DISTRITO SUR ↓', '#3df58a', 3.6, [-34, 3.4, 33.2], 0); k.sign('AYUNTAMIENTO · PLAYA ↓', '#ffcf5a', 4.6, [34, 3.4, 33.2], 0);
+    // fondo: edificios al este de la calle lateral y hacia el oeste
+    const R = seeded(99), pal = ['#2a2741', '#30293f', '#3a2f3a', '#283040', '#3a3450'];
+    for (let z = 36; z < 104; ) { const d = 7 + R() * 7, h = 10 + R() * 26; if (z + d > 104) break; G.box(39.6, 0, z, 48, h, z + d, pal[Math.floor(R() * 5)], { top: '#1d1a2a' }); for (let y = 4; y + 1.6 < h; y += 3.2) for (let a = z + .6; a + 1.2 < z + d; a += 2.4) if (R() < .5) G.rect('w', 39.6, a, a + 1.2, y, y + 1.5, '#ffd58a', false, .04); z += d + .4; }
+    // gente
+    const prom = [[-58, 107], [36, 107]]; k.walker(prom); k.walker(prom.slice().reverse());
+    k.walker([[-24, 49], [24, 49], [24, 63], [-24, 63]]); k.walker([[-31, 40], [-31, 100]]); k.walker([[31, 100], [31, 40]]);
+    k.walker([[-25, 77], [25, 77]]); k.walker([[25, 103], [-25, 103]]); k.walker([[-51, 38], [-51, 62]]);
+    for (const [x, z] of [[-43.3, 117.5], [-29.3, 120.5], [2.7, 116.5]]) k.npc(x + 1, z, Math.PI / 2, null, true);
+    k.npc(-6, 51.3, 0, null, true); k.npc(6, 60.7, Math.PI, null, true);
+  });
+}
+
 /* ---- 99_main.js ---- */
 /* =====================================================================
    ARRANQUE
@@ -6289,7 +6567,7 @@ ACHS.push(['home1', 'Propietario', 'Compra tu primera casa', () => Homes.count()
   say(.05, 'Cargando tipografías…');
   try { await Promise.race([Promise.all([document.fonts.load('40px Bungee'), document.fonts.load('600 20px "Barlow Semi Condensed"')]), sleep(2500)]); } catch (e) { }
   const labels = { city: 'Construyendo la ciudad…', casino: 'Encendiendo el casino…', premier: 'Abriendo el Salón Premier…', avenida: 'Trazando la Avenida Salera…', salera: 'Abriendo el centro comercial Salera…', vip: 'Preparando la planta High Roller…', roof: 'Subiendo a la azotea…', burger: 'Calentando la plancha de BURGER BOOM…' };
-  try { await World.init((k, id) => say(.1 + k * .88, labels[id])); }
+  try { await World.init((k, id) => say(.1 + k * .88, labels[id] || (id === 'sur' ? 'Levantando el Distrito Sur…' : 'Construyendo el barrio…'))); }
   catch (e) { console.error(e); txt.textContent = 'No se pudo iniciar el 3D en este equipo. Prueba en Ajustes con calidad «Baja» o usa otro navegador.'; return; }
   say(1, Wallet.cents === 10000 && !Store.get('seen', false) ? 'Tienes 100 € de dinero ficticio. ¡Suerte!' : 'Saldo guardado: ' + fmt(Wallet.cents));
   const go = $('#bStart'); go.hidden = false; go.focus();

@@ -4,6 +4,8 @@
 const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 3000, PUB = path.join(__dirname, 'public');
+// versión del juego: cambia cada vez que se sube un index.html nuevo (los jugadores se recargan solos)
+let VER = '0'; try { VER = require('crypto').createHash('md5').update(fs.readFileSync(path.join(PUB, 'index.html'))).digest('hex').slice(0, 10); } catch (e) { }
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
 
 const server = http.createServer((req, res) => {
@@ -21,7 +23,7 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
 const players = new Map(); // id -> { ws, state, lk, dirty, lkDirty, n, t0 }
 const clean = s => String(s || 'Jugador').replace(/[<>&"']/g, '').trim().slice(0, 16) || 'Jugador';
 const num = (v, lim = 1e6) => { v = +v; return Number.isFinite(v) ? Math.max(-lim, Math.min(lim, v)) : 0; };
-const SCENES = new Set(['city', 'avenida', 'casino', 'premier', 'vip', 'roof', 'burger', 'salera', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8']);
+const SCENES = new Set(['city', 'avenida', 'casino', 'premier', 'vip', 'roof', 'burger', 'salera', 'sur', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8']);
 
 wss.on('connection', ws => {
   let me = null;
@@ -33,7 +35,7 @@ wss.on('connection', ws => {
       const id = String(m.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 16) || 'p' + Math.random().toString(36).slice(2, 10);
       const old = players.get(id); if (old && old.ws !== ws) try { old.ws.close(); } catch (e) { }
       me = { id, ws, state: { id, name: clean(m.name), scene: 'city', x: 0, y: 0, z: 0, ry: 0, mv: 0, m: 0, car: null }, lk: '', dirty: true, lkDirty: true, n: 0, t0: Date.now() };
-      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); return;
+      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, { t: 'ver', v: VER }); return;
     }
     if (!me) return;
     // límite de mensajes por segundo
@@ -50,6 +52,11 @@ wss.on('connection', ws => {
     } else if (m.t === 'name') { me.state.name = clean(m.name); me.dirty = true; }
     else if (m.t === 'sync') { sendSnap(ws); jxTo(ws); }
     else if (m.t === 'tx') feed(me, m);
+    else if (m.t === 'stats') stats(me, m);
+    else if (m.t === 'seed') seed(m);
+    else if (m.t === 'run') runFor(me, m);
+    else if (m.t === 'vote') vote(me, m);
+    else if (m.t === 'mayorset' && DB.mayor && DB.mayor.id === me.id && BONUS.has(m.bonus)) { DB.mayor.bonus = m.bonus; dirtyCity(); }
     else if (m.t === 'jxbet') {
       const c = Math.round(num(m.c, 1e12));
       if (JX.ph !== 'wait' || c <= 0 || JX.bets.has(me.id)) { send(ws, { t: 'jxno', c }); return; }
@@ -70,6 +77,56 @@ function feed(me, m) {
   if (me.fq.length >= 2 && !(m.type === 'win' && c >= 2000)) return; me.fq.push(now);
   broadcast({ t: 'feed', pid: me.id, n: me.state.name, g: m.game, k: m.type, c });
 }
+
+// ---------- Datos que se guardan en disco: ranking y alcaldía ----------
+const DATA = process.env.DATA_FILE || path.join(__dirname, 'data.json');
+let DB = { top: {}, mayor: null, el: null };
+try { DB = Object.assign(DB, JSON.parse(fs.readFileSync(DATA, 'utf8'))); } catch (e) { }
+let dbDirty = false; const saveDb = () => { dbDirty = true; };
+setInterval(() => { if (!dbDirty) return; dbDirty = false; fs.writeFile(DATA, JSON.stringify(DB), () => { }); }, 10000);
+
+// Ranking: solo jugadores reales (cada uno envía sus números al conectarse y cada poco)
+const rec = (id, o) => { const r = DB.top[id] || (DB.top[id] = { id }); return Object.assign(r, o); };
+function stats(me, m) {
+  const day = Math.floor(num(m.tday, 1e7));
+  rec(me.id, { n: me.state.name, net: Math.round(num(m.net, 1e15)), lvl: Math.round(num(m.lvl, 1e4)), best: Math.round(num(m.best, 1e15)), tour: Math.round(num(m.tour, 1e9)), tday: day, at: Date.now() });
+  pruneTop(); saveDb(); dirtyTop();
+}
+// si el servidor se reinició y perdió el ranking, los jugadores le devuelven la última copia que vieron
+function seed(m) {
+  if (!Array.isArray(m.list)) return; let n = 0;
+  for (const x of m.list.slice(0, 100)) { const id = String(x.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 16); if (!id || DB.top[id]) continue; rec(id, { n: clean(x.n), net: Math.round(num(x.net, 1e15)), lvl: Math.round(num(x.lvl, 1e4)), best: Math.round(num(x.best, 1e15)), tour: Math.round(num(x.tour, 1e9)), tday: Math.floor(num(x.tday, 1e7)), at: Math.round(num(x.at, 1e13)) }); n++; }
+  if (n) { pruneTop(); saveDb(); dirtyTop(); }
+}
+function pruneTop() { const L = Object.values(DB.top); if (L.length <= 300) return; L.sort((a, b) => b.net - a.net); for (const r of L.slice(300)) delete DB.top[r.id]; }
+function topMsg() { return { t: 'top', list: Object.values(DB.top) }; }
+let topD = false, lastTop = 0; const dirtyTop = () => { topD = true; };
+
+// Alcaldía: elecciones cada 30 minutos. Gana quien tenga más votos.
+const EL_MS = 30 * 60000, BONUS = new Set(['wage', 'biz', 'xp']);
+function newElection() { DB.el = { ends: Date.now() + EL_MS, cands: {}, votes: {} }; saveDb(); }
+if (!DB.el || !DB.el.ends) newElection();
+function runFor(me, m) {
+  const e = DB.el; if (Object.keys(e.cands).length >= 12 || e.cands[me.id]) return;
+  e.cands[me.id] = { id: me.id, n: me.state.name, slogan: clean(m.slogan).slice(0, 40) || 'Por una ciudad con más neón', bonus: BONUS.has(m.bonus) ? m.bonus : 'wage' }; dirtyCity();
+}
+function vote(me, m) { const e = DB.el, id = String(m.id || ''); if (!e.cands[id]) return; e.votes[me.id] = id; dirtyCity(); }
+function cityMsg() {
+  const e = DB.el, v = {}; for (const k in e.votes) v[e.votes[k]] = (v[e.votes[k]] || 0) + 1;
+  return { t: 'city', mayor: DB.mayor, el: { ends: e.ends, left: e.ends - Date.now(), cands: Object.values(e.cands).map(c => Object.assign({ v: v[c.id] || 0 }, c)), voted: e.votes } };
+}
+let cityD = false; const dirtyCity = () => { cityD = true; saveDb(); };
+setInterval(() => {
+  const now = Date.now(), e = DB.el;
+  if (now >= e.ends) {
+    const v = {}; for (const k in e.votes) v[e.votes[k]] = (v[e.votes[k]] || 0) + 1;
+    const best = Object.values(e.cands).sort((a, b) => (v[b.id] || 0) - (v[a.id] || 0))[0];
+    if (best) { DB.mayor = { id: best.id, n: best.n, bonus: best.bonus, slogan: best.slogan, votes: v[best.id] || 0, since: now }; broadcast({ t: 'mayornew', n: best.n }); }
+    newElection(); cityD = true;
+  }
+  if (cityD) { cityD = false; broadcast(cityMsg()); }
+  if (topD && now - lastTop > 2000) { topD = false; lastTop = now; broadcast(topMsg()); }
+}, 1000);
 
 // JetX compartida: una sola ronda para todos, la decide el servidor
 const JX_WAIT = 6000, JX_PAUSE = 3000, JX = { ph: 'wait', t0: Date.now(), r: 0, crash: 2, bets: new Map(), hist: [], bd: false, lastB: 0 };

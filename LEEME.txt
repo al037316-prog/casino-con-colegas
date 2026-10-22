@@ -27,6 +27,12 @@ PROBAR EN TU ORDENADOR (opcional)
      npm start
   Abre http://localhost:3000
 
+QUÉ SE COMPARTE ENTRE TODOS
+  - Mundo, posición, ropa, coche, nombre y dinero encima de cada jugador.
+  - El juego al que está jugando cada uno (cartel rosa encima de la cabeza).
+  - JetX: una sola ronda para todos, con la lista de apuestas y retiros en directo.
+  - Barra "EN DIRECTO" en las máquinas con lo que apuestan y ganan los demás.
+
 AVISOS
   - Plan gratis: si nadie juega en 15 minutos el servidor se duerme; el primero que
     entra espera unos 30 segundos y luego va normal.

@@ -102,6 +102,15 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .gp{width:min(1180px,100%);height:min(780px,100%);display:flex;flex-direction:column;border-radius:22px;background:linear-gradient(180deg,rgba(32,21,62,.97),rgba(16,11,33,.98));border:1px solid var(--line);box-shadow:0 0 0 1px rgba(0,0,0,.5),0 30px 80px rgba(0,0,0,.6),0 0 60px color-mix(in srgb,var(--accent) 22%,transparent),inset 0 1px 0 rgba(255,255,255,.07);overflow:hidden;animation:gpin .35s cubic-bezier(.2,1.3,.4,1);}
 @keyframes gpin{from{transform:scale(.94) translateY(14px);opacity:0;}}
 .gp-head{display:flex;align-items:center;gap:12px;padding:12px 14px 12px 20px;border-bottom:1px solid rgba(255,255,255,.07);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 16%,transparent),transparent 60%);}
+.hm-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;background:rgba(255,255,255,.05);margin:4px 0}
+.hm-act{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 6px}.hm-list{max-height:52vh;overflow:auto}
+.gp-feed{display:flex;gap:6px;align-items:center;padding:5px 12px;overflow:hidden;white-space:nowrap;background:rgba(0,0,0,.35);border-bottom:1px solid rgba(255,255,255,.06);font-size:12.5px;font-weight:600;min-height:28px}
+.gp-feed .lv{color:#ff4d6d;font-weight:800;letter-spacing:.5px;flex:none}
+.gp-feed .fi{flex:none;padding:2px 9px;border-radius:99px;background:rgba(255,255,255,.07);color:#cfc8e8}
+.gp-feed .fi.win{background:rgba(61,245,138,.14);color:#9dffc4}.gp-feed .fi.me{outline:1px solid rgba(255,207,90,.5)}
+.jx-live{display:flex;flex-direction:column;gap:3px;max-height:190px;overflow:auto;font-size:13px}
+.jx-live .row{display:flex;justify-content:space-between;gap:8px;padding:3px 8px;border-radius:7px;background:rgba(255,255,255,.05)}
+.jx-live .row.ok{background:rgba(61,245,138,.14);color:#9dffc4}.jx-live .row.lost{background:rgba(255,77,94,.12);color:#ffb3bb}
 .gp-head h2{margin:-10px -12px;padding:10px 12px;min-width:0;font-family:var(--display);font-weight:400;font-size:24px;color:#fff;text-shadow:0 0 8px var(--accent);letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gp-head .sub{color:var(--muted);font-weight:600;font-size:14px;white-space:nowrap;}
 .gp-head .sp{flex:1;}
@@ -901,15 +910,16 @@ const UI = {
         el('button', { class: 'ib', 'aria-label': 'Cerrar', html: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>', onclick: () => this.close() })),
       body);
     root.append(card); root.hidden = false;
-    this.panelGame = g; this.panelCard = card;
+    this.panelGame = g; this.panelCard = card; this.panelId = gameId;
     g.mount(body, opts, card);
+    if (gameId !== 'burger' && typeof Feed !== 'undefined') Feed.mount(card);
     World && World.setInputBlocked(true);
   },
   close(force) {
     const g = this.panelGame; if (!g) return;
     if (!force && g.canClose && !g.canClose()) return;
     g.unmount && g.unmount();
-    this.panelGame = null; $('#panel').hidden = true; $('#panel').innerHTML = '';
+    this.panelGame = null; this.panelId = ''; $('#panel').hidden = true; $('#panel').innerHTML = '';
     World && World.setInputBlocked(false);
   },
   modal(html, onMount) {
@@ -1561,7 +1571,7 @@ const World = (() => {
     initMats(); GLOW_TEX = glowTexture(); BLOB_TEX = blobTexture();
     applyQuality(true);
     addEventListener('resize', resize); resize();
-    const steps = [['city', () => extendCity(buildCity())], ['avenida', buildAvenida], ['salera', buildSalera], ['casino', () => extendCasino(buildCasino())], ['premier', buildPremier], ['vip', buildVip], ['roof', buildRoof], ['burger', buildBurger]];
+    const steps = [['city', () => extendCity(buildCity())], ['avenida', buildAvenida], ['salera', buildSalera], ['casino', () => extendCasino(buildCasino())], ['premier', buildPremier], ['vip', buildVip], ['roof', buildRoof], ['burger', buildBurger], ...(typeof Homes !== 'undefined' ? Homes.steps() : [])];
     let i = 0;
     return new Promise(res => {
       const next = () => {
@@ -1674,15 +1684,16 @@ const World = (() => {
      interacción se hacen en coordenadas locales del área en la que está. Se pasa de un área a
      otra andando por puertas, escaleras o en ascensor. */
   const PLACE = {
-    city: { off: [0, 0, 0], ext: true, zone: [-1e4, 100, -1e4, 1e4] },
-    avenida: { off: [-268, 0, 0], ext: true, zone: [100, 1e4, -1e4, 1e4] },
+    city: { off: [0, 0, 0], ext: true, zone: [-1e4, 40, -1e4, 1e4] },
+    avenida: { off: [-328, 0, 0], ext: true, zone: [40, 1e4, -1e4, 1e4] },
     casino: { off: [0, 0, 376], zone: [-18.4, 18.4, -38.4, -10] },
     premier: { off: [0, 6, 776], zone: [-18.4, 18.4, -38.4, -10] },
     vip: { off: [0, 12, 1176], zone: [-18.4, 18.4, -38.4, -10] },
     roof: { off: [0, 18, 1576], zone: [-18.4, 18.4, -38.4, -10] },
     burger: { off: [0, 0, -378], zone: [-12.4, 12.4, 10, 34.4] },
-    salera: { off: [-268, 0, 369], zone: [107.6, 156.4, -48.4, -14] },
+    salera: { off: [-328, 0, 369], zone: [47.6, 96.4, -48.4, -14] },
   };
+  function defPlace(id, P) { PLACE[id] = P; }
   function place(s) {
     const P = PLACE[s.id] || { off: [0, 0, 0], zone: [0, 0, 0, 0] };
     s.off = new THREE.Vector3(...P.off); s.group.position.copy(s.off); s.ext = !!P.ext;
@@ -1930,7 +1941,7 @@ const World = (() => {
     } else if (!p.h) { p.h = makeHuman(randomLook()); scene.add(p.h.root); }
     const ck = d.car ? d.car + JSON.stringify(d.cc) + JSON.stringify(d.ct) : null;
     if (ck !== p.carKey) { p.carKey = ck; if (p.car) { scene.remove(p.car); p.car = null; } if (d.car && CAR[d.car]) { p.car = carGeo(CAR[d.car], d.cc || '#888', d.ct || {}); scene.add(p.car); } }
-    p.tx = d.x; p.tz = d.z; p.tyy = d.y || 0; p.tr = d.ry || 0; p.mv = d.mv || 0; p.scene = d.scene; p.name = d.name || 'Jugador'; p.m = d.m || 0;
+    p.tx = d.x; p.tz = d.z; p.tyy = d.y || 0; p.tr = d.ry || 0; p.mv = d.mv || 0; p.scene = d.scene; p.name = d.name || 'Jugador'; p.m = d.m || 0; p.g = d.g || '';
   }
   function updatePeers(dt, t) {
     for (const p of peers.values()) {
@@ -1941,7 +1952,7 @@ const World = (() => {
       let dr = p.tr - p.ry; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); p.ry += dr * k;
       if (p.car) { p.car.position.set(p.x, 0, p.z); p.car.rotation.y = p.ry; }
       else { p.h.root.position.set(p.x, p.y, p.z); p.h.root.rotation.y = p.ry; p.h.animate(dt, p.mv / 2.2, t); const sc = scenes[p.scene]; const [lx, lz] = loc(sc, p.x, p.z); p.h.light(lx, lz, sc.lights); }
-      p.tag.set(p.name, p.m); p.tag.sprite.position.set(p.x, p.y + (p.car ? 2.3 : 2.55), p.z);
+      p.tag.set(p.name, p.m, p.g); p.tag.sprite.position.set(p.x, p.y + (p.car ? 2.45 : 2.7), p.z);
     }
   }
   function dropPeer(id) { const p = peers.get(id); if (!p) return; if (p.h) scene.remove(p.h.root); if (p.car) scene.remove(p.car); scene.remove(p.tag.sprite); peers.delete(id); }
@@ -1992,7 +2003,7 @@ const World = (() => {
     showHint('<b>WASD</b> o clic en el suelo para caminar · <b>arrastra</b> para girar la cámara · <b>E</b> para interactuar. El casino está detrás de ti… y BURGER BOOM, al otro lado de la calle.', 14000);
   }
   return {
-    init, start, enter, ride, setWaypoint, setDriving, get driving() { return driving; }, areaAt, collideAt(sc, x, z, r) { const [lx, lz] = loc(sc, x, z); const [a, b] = collideIn(sc, lx, lz, r); return [a + sc.off.x, b + sc.off.z]; }, get keys() { return keys; }, walkTo(x, z) { moveTarget = { x, z }; }, setInputBlocked, applyQuality, showHint, setLook, emote, get scenes() { return scenes; }, get riding() { return player && player.ride; },
+    init, start, enter, ride, defPlace, setWaypoint, setDriving, get driving() { return driving; }, areaAt, collideAt(sc, x, z, r) { const [lx, lz] = loc(sc, x, z); const [a, b] = collideIn(sc, lx, lz, r); return [a + sc.off.x, b + sc.off.z]; }, get keys() { return keys; }, walkTo(x, z) { moveTarget = { x, z }; }, setInputBlocked, applyQuality, showHint, setLook, emote, get scenes() { return scenes; }, get riding() { return player && player.ride; },
     refreshFog() { scene.fog = new THREE.Fog(cur.fog[0], cur.fog[1], cur.fog[2]); renderer.setClearColor(cur.fog[0]); },
     get scene() { return cur; }, get player() { return player; }, get three() { return { renderer, scene, camera }; },
     addAnim(sc, a) { (sc.anims || (sc.anims = [])).push(a); },
@@ -2026,14 +2037,14 @@ function buildCity() {
   const sc = {
     label: 'PLAZA DEL NEÓN', music: 'city', group: new THREE.Group(), colliders: [], circles: [], interact: [], anims: [], lights: [],
     cam: { pitch: .4, dist: 8.5, min: 4, max: 15 }, camCollide: true, fog: [0x1a1236, 40, 165],
-    bounds: { x0: -100, x1: 101, z0: -34, z1: 34 }, spawn: { x: 0, z: .5, yaw: 0 },
+    bounds: { x0: -100, x1: 41, z0: -34, z1: 34 }, spawn: { x: 0, z: .5, yaw: 0 },
   };
   const G = new Geo(), R = seeded(7);
   const gl1 = new Glows(1.1), gl3 = new Glows(3.4), gl8 = new Glows(9);
   const L = sc.lights;
 
   /* ---------- Luces horneadas ---------- */
-  const lampXs = [-26, -18, -10, 10, 18, 26, -46, -58, -70, 46, 58, 70];
+  const lampXs = [-26, -18, -10, 10, 18, 26, -46, -58, -70];
   for (const x of lampXs) for (const s of [-1, 1]) L.push(Lt(x, 6, s * 4.9, '#ffb870', 11, 1.05));
   L.push(Lt(0, 4.2, -7.6, '#ffd27a', 13, 1.5), Lt(-9, 3, -8.5, '#ff3d9a', 10, 1.1), Lt(9, 3, -8.5, '#ff3d9a', 10, 1.1), Lt(0, 8, -8.4, '#ff4fb0', 14, 1),
     Lt(-12, 10.5, -8.6, '#3ff2ff', 9, .8), Lt(12, 10.5, -8.6, '#b45cff', 9, .8));
@@ -2088,7 +2099,9 @@ function buildCity() {
     band(-10, -2, '255,61,154'); band(10, 3, '255,190,40');
     g.globalCompositeOperation = 'source-over';
   });
-  const gm = new THREE.Mesh(new THREE.PlaneGeometry(GW, GH), new THREE.MeshBasicMaterial({ map: ground.tex }));
+  // el suelo de la ciudad acaba en x=40: ahí empieza la Avenida Salera
+  const pg = new THREE.PlaneGeometry(GW, GH), pp = pg.attributes.position, pu = pg.attributes.uv; for (let i = 0; i < pp.count; i++) if (pp.getX(i) > 0) { pp.setX(i, 40); pu.setX(i, (40 + GW / 2) / GW); }
+  const gm = new THREE.Mesh(pg, new THREE.MeshBasicMaterial({ map: ground.tex }));
   gm.rotation.x = -Math.PI / 2; sc.group.add(gm);
   const far = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshBasicMaterial({ color: 0x17141f })); far.rotation.x = -Math.PI / 2; far.position.y = -.05; sc.group.add(far);
   // calles laterales más allá del lienzo
@@ -2415,7 +2428,7 @@ function buildCity() {
   for (const side of [-1, 1]) {
     for (let x = 39.5; x < 100;) {
       const w = 7 + R() * 7, h = 8 + R() * 26, col = palette[Math.floor(R() * palette.length)];
-      for (const sx of [-1, 1]) {
+      for (const sx of []) { // el oeste es ahora el Barrio Residencial
         const a0 = sx > 0 ? x : -x - w, a1 = sx > 0 ? x + w : -x;
         const z0 = side < 0 ? -10 - (8 + R() * 10) : 10, z1 = side < 0 ? -10 : 10 + 8 + R() * 10;
         tower(a0, a1, z0, z1, h, col, side < 0 ? ['s'] : ['n'], { y0: 4.5, lit: .5 });
@@ -2427,13 +2440,14 @@ function buildCity() {
   }
   for (let i = 0; i < 26; i++) {
     const x = -95 + i * 7.6 + R() * 3, w = 6 + R() * 8, h = 22 + R() * 50;
+    if (x + w / 2 > 38) continue; // al este está la Avenida Salera
     if (Math.abs(x) < 20) { tower(x - w / 2, x + w / 2, -60 - R() * 10, -46, h + 18, palette[i % palette.length], ['s'], { y0: 6, lit: .45, beacon: R() < .4 }); continue; }
     tower(x - w / 2, x + w / 2, -48 - R() * 14, -36, h, palette[i % palette.length], ['s'], { y0: 6, lit: .45, beacon: R() < .3 });
     tower(x - w / 2, x + w / 2, 34, 46 + R() * 14, h * .8, palette[(i + 3) % palette.length], ['n'], { y0: 6, lit: .45, beacon: R() < .3 });
   }
   for (const sx of [-1, 1]) {
-    tower(sx > 0 ? 39.5 : -48, sx > 0 ? 48 : -39.5, -34, -10.5, 18, '#2c2a40', [sx > 0 ? 'w' : 'e'], { lit: .5 });
-    tower(sx > 0 ? 39.5 : -48, sx > 0 ? 48 : -39.5, 10.5, 34, 16, '#30293f', [sx > 0 ? 'w' : 'e'], { lit: .5 });
+    tower(sx > 0 ? 39.5 : -48, sx > 0 ? 47.4 : -39.5, -34, sx > 0 ? -16.2 : -10.5, 18, '#2c2a40', [sx > 0 ? 'w' : 'e'], { lit: .5 });
+    tower(sx > 0 ? 39.5 : -48, sx > 0 ? 48 : -39.5, sx > 0 ? 17.6 : 10.5, 34, 16, '#30293f', [sx > 0 ? 'w' : 'e'], { lit: .5 });
     tower(sx > 0 ? 16.5 : -27.5, sx > 0 ? 27.5 : -16.5, -34, -30, 14, '#2a2741', [sx > 0 ? 'e' : 'w'], { lit: .4 });
   }
   // coches aparcados en las calles laterales
@@ -3385,14 +3399,14 @@ Games.roulette = {
       $$('.cell.win', board).forEach(c => c.classList.remove('win'));
       const n = WHEEL[RNG.int(37)], idx = WHEEL.indexOf(n), pa = idx * TAU / 37 - Math.PI / 2;
       const D = 6.2, w0 = S.rot, W = TAU * (2.2 + RNG.float()), wEnd = w0 + W, b0 = -Math.PI / 2 + RNG.float() * TAU;
-      let K = Math.ceil((5 * TAU - (b0 - wEnd - pa)) / TAU); const B = b0 - wEnd - pa + K * TAU;
+      const KT = Math.ceil((5 * TAU - (b0 - wEnd - pa)) / TAU); const B = b0 - wEnd - pa + KT * TAU;
       big.textContent = '…'; big.className = 'big'; Sfx.play('spin'); setTimeout(() => Sfx.play('spin'), 500);
       const t0 = performance.now(); let lastSeg = -1;
       const tick = now => {
         if (!S.alive) return;
         const k = Math.min(1, (now - t0) / 1000 / D), e = Ease.outCubic(k);
         S.rot = w0 + W * e;
-        const free = b0 - B * Ease.outQuart(Math.min(1, k * 1.05)), lock = S.rot + pa - K * TAU;
+        const free = b0 - B * Ease.outQuart(Math.min(1, k * 1.05)), lock = S.rot + pa - KT * TAU;
         const bl = k < .72 ? 0 : Ease.inOutCubic((k - .72) / .28);
         let r = .915; if (k > .5) { const q = Math.min(1, (k - .5) / .3); r = lerp(.915, .67, Ease.outQuart(q)) + Math.abs(Math.sin(q * 9)) * (1 - q) * .07; }
         S.ball = { a: lerp(free, lock, bl), r };
@@ -3625,10 +3639,11 @@ Games.jetx = {
     <li><b>Retiro automático</b>: cobra solo al llegar al multiplicador que elijas. <b>Apuesta automática</b>: repite la apuesta cada ronda.</li>
     <li>Un 1 % de los vuelos explota en 1,00×. Máximo 1000×. Retorno teórico 99 %. Atajo: <b>Espacio</b>.</li></ul>`,
   mount(body, o, card) {
-    const S = this.S = { phase: 'wait', t: 0, wait: 4, crash: 0, el: 0, m: 1, bet: 0, inPlay: false, queued: 0, cashed: 0, alive: true, raf: 0, boom: 0, eng: null, card, autoOn: Store.get('jx_auto', false), autoX: Store.get('jx_ax', 2), autoBet: false };
+    const SH = Net.mode === 'online';
+    const S = this.S = { SH, pend: false, phase: 'wait', t: 0, wait: SH ? 6 : 4, crash: 0, el: 0, m: 1, bet: 0, inPlay: false, queued: 0, cashed: 0, alive: true, raf: 0, boom: 0, eng: null, card, autoOn: Store.get('jx_auto', false), autoX: Store.get('jx_ax', 2), autoBet: false };
     const { stage, side } = split2(body);
     const cv = el('canvas', { class: 'gc' }); const hist = el('div', { class: 'jx-hist' }); stage.append(cv, hist);
-    (Store.get('jx_hist', [])).slice(0, 14).reverse().forEach(addHist);
+    (SH ? JXN.hist : Store.get('jx_hist', [])).slice(0, 14).reverse().forEach(addHist);
     function addHist(m) { hist.prepend(el('span', { class: 'pill ' + (m < 2 ? 'p-lo' : m < 10 ? 'p-mid' : 'p-hi'), text: fmtX(m) })); while (hist.children.length > 18) hist.lastChild.remove(); }
     const bc = BetControl(side, { key: 'jetx', value: 100 });
     const tog = el('button', { class: 'tog' + (S.autoOn ? ' on' : ''), 'aria-label': 'Retiro automático', onclick: () => { S.autoOn = !S.autoOn; tog.classList.toggle('on', S.autoOn); Store.set('jx_auto', S.autoOn); } });
@@ -3641,11 +3656,30 @@ Games.jetx = {
     side.append(el('div', { class: 'betc' }, el('span', { class: 'lbl', text: 'Retiro automático' }), el('div', { class: 'autoc' }, tog, ax, el('span', { text: '×' }))),
       el('div', { class: 'betc' }, el('span', { class: 'lbl', text: 'Apuesta automática' }), el('div', { class: 'autoc' }, tog2, el('span', { style: 'color:var(--muted);font-size:14px', text: 'Repite la apuesta cada ronda' }))),
       main, sBet.el, sWin.el);
+    // jugadores de esta ronda (modo multijugador)
+    const live = el('div', { class: 'jx-live' });
+    function drawLive() {
+      live.innerHTML = ''; const L = JXN.bets.slice().sort((a, b) => b.c - a.c);
+      live.append(el('span', { class: 'lbl', text: 'Apuestas de esta ronda (' + L.length + ')' }));
+      if (!L.length) live.append(el('span', { style: 'color:var(--muted)', text: 'Nadie ha apostado todavía' }));
+      for (const b of L.slice(0, 30)) live.append(el('div', { class: 'row' + (b.x ? ' ok' : S.phase === 'crash' ? ' lost' : '') }, el('span', { text: b.n }), el('span', { class: 'num', text: fmt(b.c) + (b.x ? ' → ' + fmtX(b.x) : '') })));
+    }
+    if (SH) {
+      side.append(live); drawLive();
+      JXN.cb = (t, m) => {
+        if (!S.alive) return;
+        if (t === 'jxb') drawLive();
+        else if (t === 'jxok' && S.inPlay) { cashDone(m.x); drawLive(); }
+        else if (t === 'jxno' && S.inPlay) { Wallet.refund(S.bet, 'jetx'); S.inPlay = false; S.bet = 0; S.queued = m.c; UI.toast('La ronda ya había despegado: tu apuesta pasa a la siguiente', ''); Wallet.bet(m.c, 'jetx') || (S.queued = 0); ui(); }
+      };
+    }
+    function sendBet() { Net.transport.send({ t: 'jxbet', c: S.bet, ax: S.autoOn ? S.autoX : 0 }); }
     let W = 0, H = 0, g = null;
     function resize() { const r = stage.getBoundingClientRect(); W = Math.max(200, r.width); H = Math.max(180, r.height); cv.style.width = W + 'px'; cv.style.height = H + 'px'; g = fitCanvas(cv, W, H); }
     function ui() {
       const p = S.phase;
-      if (p === 'fly' && S.inPlay) { main.className = 'btn go wide pulse'; main.textContent = 'Retirar ' + fmt(Math.floor(S.bet * S.m)); main.disabled = false; }
+      if (p === 'fly' && S.inPlay && S.pend) { main.className = 'btn go wide'; main.textContent = 'Retirando…'; main.disabled = true; }
+      else if (p === 'fly' && S.inPlay) { main.className = 'btn go wide pulse'; main.textContent = 'Retirar ' + fmt(Math.floor(S.bet * S.m)); main.disabled = false; }
       else if (p === 'wait' && S.inPlay) { main.className = 'btn danger wide'; main.textContent = 'Cancelar apuesta'; main.disabled = false; }
       else if (S.queued) { main.className = 'btn danger wide'; main.textContent = 'Cancelar (próxima ronda)'; main.disabled = false; }
       else { main.className = 'btn primary wide'; main.textContent = p === 'wait' ? 'Apostar' : 'Apostar a la próxima'; main.disabled = false; }
@@ -3654,22 +3688,27 @@ Games.jetx = {
     }
     function press() {
       if (S.phase === 'fly' && S.inPlay) return cash(S.m);
-      if (S.phase === 'wait' && S.inPlay) { Wallet.refund(S.bet, 'jetx'); S.inPlay = false; S.bet = 0; return ui(); }
+      if (S.phase === 'wait' && S.inPlay) { SH && Net.transport.send({ t: 'jxcancel' }); Wallet.refund(S.bet, 'jetx'); S.inPlay = false; S.bet = 0; return ui(); }
       if (S.queued) { Wallet.refund(S.queued, 'jetx'); S.queued = 0; return ui(); }
       if (!Wallet.bet(bc.value, 'jetx')) return;
-      if (S.phase === 'wait') { S.inPlay = true; S.bet = bc.value; } else S.queued = bc.value;
+      if (S.phase === 'wait') { S.inPlay = true; S.bet = bc.value; SH && sendBet(); } else S.queued = bc.value;
       Sfx.play('chip'); ui();
     }
     function cash(m) {
-      if (!S.inPlay) return; m = Math.floor(m * 100) / 100;
+      if (!S.inPlay) return;
+      if (SH) { if (!S.pend) { S.pend = true; Net.transport.send({ t: 'jxcash' }); ui(); } return; }
+      cashDone(m);
+    }
+    function cashDone(m) {
+      S.pend = false; m = Math.floor(m * 100) / 100;
       const win = Math.floor(S.bet * m); Wallet.pay(win, 'jetx'); S.inPlay = false; S.cashed = m;
       sWin.set('+' + fmt(win - S.bet) + ' (' + fmtX(m) + ')', true); Sfx.play('cashout');
       UI.celebrate(win, S.bet, main); ui();
     }
     function newRound() {
-      S.phase = 'wait'; S.t = 0; S.el = 0; S.m = 1; S.cashed = 0; S.boom = 0;
-      if (S.queued) { S.inPlay = true; S.bet = S.queued; S.queued = 0; }
-      else if (S.autoBet && !S.inPlay) { if (Wallet.can(bc.value) && Wallet.bet(bc.value, 'jetx')) { S.inPlay = true; S.bet = bc.value; } else { S.autoBet = false; tog2.classList.remove('on'); } }
+      S.phase = 'wait'; S.t = 0; S.el = 0; S.m = 1; S.cashed = 0; S.boom = 0; S.pend = false;
+      if (S.queued) { S.inPlay = true; S.bet = S.queued; S.queued = 0; SH && sendBet(); }
+      else if (S.autoBet && !S.inPlay) { if (Wallet.can(bc.value) && Wallet.bet(bc.value, 'jetx')) { S.inPlay = true; S.bet = bc.value; SH && sendBet(); } else { S.autoBet = false; tog2.classList.remove('on'); } }
       ui();
     }
     function launch() {
@@ -3679,14 +3718,22 @@ Games.jetx = {
     function crash() {
       S.phase = 'crash'; S.t = 0; S.m = S.crash; S.eng && S.eng.stop(); S.eng = null;
       Sfx.play('explode'); FX.shake(S.card);
+      S.pend = false; if (SH) drawLive();
       if (S.inPlay) { S.inPlay = false; sWin.set('−' + fmt(S.bet)); S.card.classList.remove('flashred'); void S.card.offsetWidth; S.card.classList.add('flashred'); }
+      if (SH) { hist.innerHTML = ''; JXN.hist.slice(0, 14).reverse().forEach(addHist); return ui(); }
       addHist(S.crash); const hs = Store.get('jx_hist', []); hs.unshift(S.crash); Store.set('jx_hist', hs.slice(0, 14)); ui();
     }
     let last = performance.now();
     function frame(now) {
       if (!S.alive) return;
       const dt = Math.min(.12, (now - last) / 1000); last = now; S.t += dt;
-      if (S.phase === 'wait' && S.t >= S.wait) launch();
+      if (SH) { // la ronda la marca el servidor
+        const e = (now - JXN.t0) / 1000;
+        if (JXN.ph === 'wait') { if (S.phase !== 'wait') newRound(); S.t = e; }
+        else if (JXN.ph === 'fly') { if (S.phase === 'wait') { S.phase = 'fly'; Sfx.play('whoosh'); S.eng = Sfx.engine(); ui(); } else if (S.phase === 'crash') S.phase = 'fly'; S.el = e; S.m = jetM(e); S.eng && S.eng.set(S.m); if (S.inPlay && !S.pend) main.textContent = 'Retirar ' + fmt(Math.floor(S.bet * S.m)); }
+        else if (JXN.ph === 'crash' && JXN.crash) { if (S.phase !== 'crash') { S.crash = JXN.crash; crash(); } S.t = e; S.el = Math.log(S.crash) / JET_K; S.m = S.crash; S.boom = Math.min(1, e / .9); }
+      }
+      else if (S.phase === 'wait' && S.t >= S.wait) launch();
       else if (S.phase === 'fly') {
         S.el = S.t; S.m = jetM(S.el);
         if (S.inPlay && S.autoOn && S.m >= S.autoX && S.autoX < S.crash) cash(S.autoX);
@@ -3717,8 +3764,8 @@ Games.jetx = {
   onKey(e) { if (e.code === 'Space') this.S.press(); },
   canClose() { if (this.S.phase === 'fly' && this.S.inPlay) { UI.toast('Estás en pleno vuelo: retira primero', 'bad'); Sfx.play('error'); return false; } return true; },
   unmount() {
-    const S = this.S; S.alive = false; cancelAnimationFrame(S.raf); S.off(); S.eng && S.eng.stop();
-    if (S.inPlay && S.phase === 'wait') Wallet.refund(S.bet, 'jetx');
+    const S = this.S; S.alive = false; cancelAnimationFrame(S.raf); S.off(); S.eng && S.eng.stop(); if (S.SH) JXN.cb = null;
+    if (S.inPlay && S.phase === 'wait') { S.SH && Net.transport.send({ t: 'jxcancel' }); Wallet.refund(S.bet, 'jetx'); }
     if (S.queued) Wallet.refund(S.queued, 'jetx');
   },
 };
@@ -4768,7 +4815,9 @@ function buildFloor(cfg, content) {
       g.rect(face, at, a0, a1, 0, 1.15, wl.dado, true, .02); g.rect(face, at, a0, a1, 1.15, 1.25, wl.gold, false, .03);
       g.rect(face, at, a0, a1, 4.25, 4.33, wl.gold, false, .03); g.rect(face, at, a0, a1, 4.55, 4.65, wl.neon, false, .03);
     };
-    dN = makeWall(sc, OX - (hx + .4), OZ - (hz + .4), OX + (hx + .4), OZ - hz, WH, 'z', OZ - hz, -1, (g, ...a) => wallSkin(g, ...a, 's'));
+    const dn = cfg.doorN;
+    dN = dn ? makeWall(sc, 0, 0, 0, 0, WH, 'z', OZ - hz, -1, g => { wallSkin(g, OX - (hx + .4), OZ - (hz + .4), OX - dn, OZ - hz, WH, 's'); wallSkin(g, OX + dn, OZ - (hz + .4), OX + (hx + .4), OZ - hz, WH, 's'); g.box(OX - dn, 3.4, OZ - (hz + .4), OX + dn, WH, OZ - hz, wl.base); g.box(OX - dn - .2, 0, OZ - hz - .5, OX - dn, 3.5, OZ - hz + .1, wl.gold, { lit: false }); g.box(OX + dn, 0, OZ - hz - .5, OX + dn + .2, 3.5, OZ - hz + .1, wl.gold, { lit: false }); })
+      : makeWall(sc, OX - (hx + .4), OZ - (hz + .4), OX + (hx + .4), OZ - hz, WH, 'z', OZ - hz, -1, (g, ...a) => wallSkin(g, ...a, 's'));
     const dw = cfg.doorS;
     dS = dw ? makeWall(sc, 0, 0, 0, 0, WH, 'z', OZ + hz, 1, g => { wallSkin(g, OX - (hx + .4), OZ + hz, OX - dw, OZ + (hz + .4), WH, 'n'); wallSkin(g, OX + dw, OZ + hz, OX + (hx + .4), OZ + (hz + .4), WH, 'n'); g.box(OX - dw, 3.4, OZ + hz, OX + dw, WH, OZ + (hz + .4), wl.base); g.box(OX - dw - .2, 0, OZ + hz - .1, OX - dw, 3.5, OZ + hz + .5, wl.gold, { lit: false }); g.box(OX + dw, 0, OZ + hz - .1, OX + dw + .2, 3.5, OZ + hz + .5, wl.gold, { lit: false }); })
       : makeWall(sc, OX - (hx + .4), OZ + hz, OX + (hx + .4), OZ + (hz + .4), WH, 'z', OZ + hz, 1, (g, ...a) => wallSkin(g, ...a, 'n'));
@@ -5231,6 +5280,7 @@ const Env = (() => {
   return {
     S, WX, get hour() { return S.t % 24; },
     timeStr() { const h = Math.floor(S.t % 24), m = Math.floor((S.t % 1) * 60); return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); },
+    sleep() { const h = S.t % 24; S.t += h < 8 ? 8 - h : 32 - h; },
     isNight() { const h = S.t % 24; return h < 6.5 || h > 19.5; },
     reset() { if (!Settings.weather) { clearFx(); if (active) World.refreshFog(); } },
     onEnter(id) { active = !!(World.scene && World.scene.outdoor); if (!active) clearFx(); },
@@ -5427,8 +5477,9 @@ const PLACES = [
   { id: 'city', n: 'Plaza del Neón', sub: 'Centro de la ciudad', x: .42, y: .5, w: [0, 0] },
   { id: 'casino', n: 'Casino Neon Royale', sub: 'Al norte de la plaza', x: .42, y: .26, w: [0, -8.4] },
   { id: 'burger', n: 'BURGER BOOM', sub: 'Frente al casino', x: .42, y: .72, w: [0, 8.4] },
-  { id: 'avenida', n: 'Avenida Salera', sub: 'Al este de la plaza, siguiendo la calle', x: .7, y: .5, w: [112, 0] },
-  { id: 'salera', n: 'Centro comercial Salera', sub: 'fnac, Primor, Foot Locker, Bomboo, Cinesa y Joyería Royale', x: .7, y: .3, w: [132, -12.6] },
+  { id: 'avenida', n: 'Avenida Salera', sub: 'Al este de la plaza, siguiendo la calle', x: .7, y: .5, w: [52, 0] },
+  { id: 'salera', n: 'Centro comercial Salera', sub: 'fnac, Primor, Foot Locker, Bomboo, Cinesa y Joyería Royale', x: .7, y: .3, w: [72, -12.6] },
+  { id: 'h1', n: 'Barrio Residencial', sub: 'Casas en venta y alquiler · al oeste de la plaza', x: .14, y: .5, w: [-70, 0] },
   { id: null, n: 'Aeropuerto', sub: 'PRÓXIMAMENTE', x: .93, y: .2, soon: true },
   { id: null, n: 'Montañas', sub: 'PRÓXIMAMENTE', x: .1, y: .12, soon: true },
 ];
@@ -5758,6 +5809,7 @@ function extendCity(sc) {
     k.sign('AVENIDA SALERA →', '#3ff2ff', 4.2, [19.4, 3.4, -5.7], 0);
     k.G.box(19.3, 0, -5.9, 19.5, 2.9, -5.7, '#2a2a33');
   });
+  if (typeof Homes !== 'undefined') Homes.exterior(sc);
   sc.outdoor = true; return sc;
 }
 
@@ -5787,7 +5839,7 @@ const TUNE = {
   rims: { n: 'Llantas doradas', lv: [0, 220000], txt: 'Estético' },
 };
 const RACES = [
-  { id: 'neon', n: 'Sprint del Neón', sub: 'De la plaza a la Avenida Salera y vuelta', start: [-60, 2.45, 0], cps: [[90, 2.45], [150, 2.4], [150, -2.4], [20, -2.45], [-60, -2.45]], par: 34, prize: 25000 },
+  { id: 'neon', n: 'Sprint del Neón', sub: 'De la plaza a la Avenida Salera y vuelta', start: [-60, 2.45, 0], cps: [[60, 2.45], [95, 2.4], [95, -2.4], [20, -2.45], [-60, -2.45]], par: 25, prize: 25000 },
 ];
 
 function carGeo(m, col, t) {
@@ -5831,7 +5883,7 @@ const Vehicles = {
   spawn(id, pos) {
     const W = World.three.scene; if (this.mesh) { W.remove(this.mesh); this.mesh.traverse(n => { n.geometry && n.geometry.dispose(); }); }
     const o = this.st().own[id]; this.mesh = carGeo(CAR[id], o.col, o.t); W.add(this.mesh);
-    const p = pos || { x: 144, z: 6.6, h: Math.PI };
+    let p = pos || { x: 84, z: 6.6, h: Math.PI }; if (p.x > 102) p = { x: p.x - 60, z: p.z, h: p.h }; // posiciones guardadas antes de acercar la avenida
     this.car = { id, x: p.x, z: p.z, h: p.h, v: 0, steer: 0, spin: 0 }; this.place();
   },
   place() { const c = this.car; this.mesh.position.set(c.x, 0, c.z); this.mesh.rotation.y = c.h; },
@@ -5969,7 +6021,7 @@ Net.setLook = function (look) { this.lookStr = JSON.stringify(look); };
 // datos extra que viajan con la posición: dinero, ropa y coche
 const _sendState = Net.sendState;
 Net.sendState = function (s) {
-  s.m = Wallet.cents; s.lk = this.lookStr;
+  s.m = Wallet.cents; s.lk = this.lookStr; s.g = UI.panelId || '';
   if (World.driving && Vehicles.car) { const o = Vehicles.st().own[Vehicles.car.id]; s.car = Vehicles.car.id; s.cc = o.col; s.ct = o.t; } else s.car = null;
   _sendState.call(this, s);
 };
@@ -5977,6 +6029,10 @@ const _receive = Net.receive;
 Net.receive = function (m) {
   if (m && m.t === 'snap') { for (const id of [...this.peers.keys()]) if (!m.list.some(x => x.id === id)) { this.peers.delete(id); Bus.emit('peerLeave', { id }); } for (const x of m.list) _receive.call(this, Object.assign({ t: 'state' }, x)); return; }
   if (m && m.t === 'count') { this.online = m.n; Bus.emit('netcount', m.n); return; }
+  if (m && m.t === 'feed') { Feed.add(m); return; }
+  if (m && m.t === 'jx') { JXN.ph = m.ph; JXN.t0 = performance.now() - m.el; JXN.r = m.r; JXN.crash = m.crash || 0; JXN.hist = m.hist || []; JXN.cb && JXN.cb('jx', m); return; }
+  if (m && m.t === 'jxb') { JXN.bets = m.list || []; JXN.br = m.r; JXN.cb && JXN.cb('jxb', m); return; }
+  if (m && (m.t === 'jxok' || m.t === 'jxno')) { JXN.cb && JXN.cb(m.t, m); return; }
   _receive.call(this, m);
 };
 Bus.on('net', on => {
@@ -5987,24 +6043,236 @@ Bus.on('net', on => {
 Bus.on('netcount', () => NetHud.draw());
 const NetHud = { draw() { const e = $('#online'); if (!e) return; if (Net.mode === 'local') { e.hidden = true; return; } e.hidden = false; e.classList.toggle('off', Net.mode !== 'online'); e.textContent = Net.mode === 'online' ? '● ' + Math.max(1, Net.online) + ' en línea' : '● sin conexión'; } };
 
+/** Estado de la ronda JetX compartida (lo manda el servidor) */
+const JXN = { ph: 'wait', t0: 0, r: 0, crash: 0, hist: [], bets: [], br: 0, cb: null };
+const gameName = g => (Games[g] && Games[g].title) ? Games[g].title.charAt(0) + Games[g].title.slice(1).toLowerCase() : g;
+
+/** Apuestas y premios de los demás jugadores, en directo */
+const Feed = {
+  list: [],
+  add(m) {
+    const mine = m.pid === Net.id;
+    const it = { n: mine ? 'Tú' : m.n, g: m.g, k: m.k, c: m.c, mine };
+    this.list.unshift(it); this.list = this.list.slice(0, 12); this.draw();
+    if (!mine && m.k === 'win' && m.c >= 5000 && !UI.panelId) UI.toast(m.n + ' ha ganado ' + fmt(m.c) + ' en ' + gameName(m.g), 'good');
+  },
+  mount(card) {
+    if (Net.mode !== 'online') return;
+    this.el = el('div', { class: 'gp-feed', 'aria-label': 'Apuestas en directo' }); card.children[0].after(this.el); this.draw();
+  },
+  draw() {
+    const e = this.el; if (!e || !e.isConnected) return; e.innerHTML = '';
+    e.append(el('span', { class: 'lv', text: '● EN DIRECTO' }));
+    if (!this.list.length) e.append(el('span', { class: 'fi', text: 'Aquí verás lo que apuestan y ganan los demás' }));
+    for (const it of this.list.slice(0, 8)) e.append(el('span', { class: 'fi ' + it.k + (it.mine ? ' me' : ''), text: it.n + ' · ' + gameName(it.g) + ' ' + (it.k === 'win' ? '+' : '') + fmt(it.c) }));
+  },
+};
+
 /** Cartel con nombre y dinero que flota sobre los demás jugadores */
 function makeTag() {
-  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128; const g = cv.getContext('2d');
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 168; const g = cv.getContext('2d');
   const tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, fog: false }));
-  sp.scale.set(2.6, .65, 1); sp.renderOrder = 10; let last = '';
+  sp.scale.set(2.6, .853, 1); sp.renderOrder = 10; let last = '';
   return {
     sprite: sp,
-    set(name, cents) {
-      const key = name + '|' + cents; if (key === last) return; last = key;
-      g.clearRect(0, 0, 512, 128); g.textAlign = 'center'; g.textBaseline = 'middle';
+    set(name, cents, game) {
+      const key = name + '|' + cents + '|' + game; if (key === last) return; last = key;
+      g.clearRect(0, 0, 512, 168); g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillStyle = 'rgba(10,6,24,.72)'; const w = 470; g.beginPath(); g.roundRect ? g.roundRect(256 - w / 2, 8, w, 112, 28) : g.rect(256 - w / 2, 8, w, 112); g.fill();
       g.font = `bold 44px ${FONT_U}`; g.fillStyle = '#ffffff'; g.fillText(String(name).slice(0, 16), 256, 44);
       g.font = `38px ${FONT_D}`; g.fillStyle = '#ffcf5a'; g.fillText(fmt(cents || 0), 256, 92);
+      if (game && Games[game]) { const t = (game === 'burger' ? 'Trabajando' : 'Jugando') + ' · ' + gameName(game); g.font = `bold 28px ${FONT_U}`; const tw = g.measureText(t).width + 40; g.fillStyle = 'rgba(255,61,154,.85)'; g.beginPath(); g.roundRect ? g.roundRect(256 - tw / 2, 124, tw, 40, 20) : g.rect(256 - tw / 2, 124, tw, 40); g.fill(); g.fillStyle = '#fff'; g.fillText(t, 256, 145); }
       tex.needsUpdate = true;
     },
   };
 }
+
+/* ---- 21_homes.js ---- */
+/* =====================================================================
+   BARRIO RESIDENCIAL — casas que se compran, alquilan, visitan y amueblan.
+   Está al oeste de la Plaza del Neón, a los dos lados de la calle principal.
+   Cada casa es un interior real del mundo abierto: se entra caminando por la puerta.
+   ===================================================================== */
+const HOMES = [
+  { id: 'h1', n: 'Estudio Neón', x: -54, s: -1, price: 250000, rent: 20000, col: '#c8b8a0', roof: '#5a3a3a', H: 4.6 },
+  { id: 'h2', n: 'Piso Jardín', x: -67, s: -1, price: 1200000, rent: 80000, col: '#a8c0c8', roof: '#3a4a5a', H: 5.2 },
+  { id: 'h3', n: 'Casa Adosada', x: -80, s: -1, price: 3500000, rent: 200000, col: '#e0c8a8', roof: '#6a3a2a', H: 6.4, two: true },
+  { id: 'h4', n: 'Casa del Parque', x: -93, s: -1, price: 8000000, rent: 450000, col: '#d8d0e8', roof: '#3a2a4a', H: 6.6, two: true },
+  { id: 'h5', n: 'Loft Industrial', x: -54, s: 1, price: 2000000, rent: 120000, col: '#6a5a5a', roof: '#2a2a2a', H: 5.6 },
+  { id: 'h6', n: 'Chalet Moderno', x: -67, s: 1, price: 15000000, rent: 800000, col: '#f0f0f0', roof: '#2a2a30', H: 6.6, two: true },
+  { id: 'h7', n: 'Villa Royale', x: -80, s: 1, price: 40000000, rent: 2000000, col: '#f4e8c8', roof: '#8a6a2a', H: 7, two: true, gold: true },
+  { id: 'h8', n: 'Mansión Neón', x: -93, s: 1, price: 120000000, rent: 6000000, col: '#1e1c2c', roof: '#141220', H: 7.4, two: true, neon: '#ff3d9a' },
+];
+HOMES.forEach(h => { h.cz = h.s * 16; h.fz = h.cz - h.s * 5.2; });
+const RENT_DAYS = 7, DAY_MS = 864e5;
+
+/* Muebles: coordenadas locales de la casa con la puerta hacia +z */
+const FURN = [
+  { id: 'sofa', n: 'Sofá y mesa baja', p: 60000, c: [[-2.0, -1.2, -1.2, 1.2], [-3.6, -2.6, -.7, .7]], b: G => { G.box(-2.0, 0, -1.2, -1.2, .45, 1.2, '#5a1030', { top: '#7a1a40' }); G.box(-1.45, .45, -1.2, -1.2, 1.05, 1.2, '#5a1030'); G.floor(-4.2, -1.6, -1.1, 1.6, .02, '#7a2a3a', true); G.box(-3.6, 0, -.7, -2.6, .4, .7, '#3a2418', { top: '#6a4a30' }); } },
+  { id: 'tv', n: 'Tele gigante', p: 90000, c: [[-4.8, -4.5, -1.4, 1.4]], b: G => { G.box(-4.8, 0, -1.4, -4.5, .6, 1.4, '#1a1a1e'); G.box(-4.78, 1, -1.3, -4.62, 2.5, 1.3, '#0a0a0e'); G.rect('e', -4.61, -1.2, 1.2, 1.08, 2.42, '#3a7aff', false, .01); }, f: (it) => Object.assign(it, { label: 'Ver la tele', sub: 'Noticias de la ciudad', fn: () => { Phone.toggle(true); Phone.go('news'); } }) , at: [-3.2, 0] },
+  { id: 'kitchen', n: 'Cocina completa', p: 120000, c: [[-4.7, -.3, -4.7, -3.9]], b: G => { G.box(-4.6, 0, -4.7, -1.2, .9, -3.9, '#e8e4dc', { top: '#3a3a3a' }); G.box(-4.6, 1.8, -4.7, -1.2, 2.6, -4.3, '#e8e4dc'); G.box(-1.1, 0, -4.7, -.3, 2, -3.9, '#d0d4d8'); G.box(-3.4, .9, -4.6, -2.6, .95, -4.1, '#222'); } },
+  { id: 'bed', n: 'Cama de matrimonio', p: 80000, c: [[1.6, 4.4, -4.7, -2.2]], b: G => { G.box(1.6, 0, -4.6, 4.4, .5, -2.2, '#5a3a24'); G.box(1.7, .5, -4.5, 4.3, .75, -2.3, '#f0ece4'); G.box(1.7, .75, -3.6, 4.3, .82, -2.3, '#3a5a9a'); G.box(1.9, .75, -4.4, 2.9, .95, -3.9, '#fff'); G.box(3.1, .75, -4.4, 4.1, .95, -3.9, '#fff'); G.box(1.6, .5, -4.7, 4.4, 1.5, -4.5, '#5a3a24'); },
+    f: it => Object.assign(it, { label: 'Dormir', sub: 'Pasa la noche y despierta a las 8:00', fn: () => { Env.sleep(); UI.toast('Has dormido como un rey. Son las 8:00', 'good'); Sfx.play('chip'); } }), at: [3, -1.5] },
+  { id: 'dining', n: 'Mesa de comedor', p: 50000, c: [[1.9, 3.7, .7, 2.5]], b: G => { G.cyl(2.8, 0, 1.6, .1, .75, 8, '#2a1a10'); G.cyl(2.8, .75, 1.6, .8, .07, 14, '#8a5a34', { topColor: '#a87040' }); for (const [x, z] of [[1.75, 1.6], [3.85, 1.6], [2.8, .55], [2.8, 2.65]]) G.box(x - .22, 0, z - .22, x + .22, .48, z + .22, '#6a4a30'); } },
+  { id: 'plant', n: 'Plantas', p: 8000, c: [[-4.6, -3.8, -3.6, -2.8]], b: G => { G.cyl(-4.2, 0, -3.2, .32, .5, 8, '#8a5a34'); G.cyl(-4.2, .5, -3.2, .5, 1.3, 7, '#2f7a3a', { r2: .15 }); G.cyl(4.2, 0, .9, .25, .4, 8, '#e0d8c8'); G.cyl(4.2, .4, .9, .38, .9, 7, '#3a8a44', { r2: .1 }); } },
+  { id: 'painting', n: 'Cuadro de autor', p: 150000, b: G => { G.rect('w', 4.79, 1.4, 3.4, 1.4, 2.7, '#c89a3a', false, .01); G.rect('w', 4.78, 1.55, 3.25, 1.55, 2.55, '#2a6aaa', true, .012); G.rect('w', 4.77, 1.9, 2.8, 1.7, 2.2, '#ffcf5a', true, .014); } },
+  { id: 'neon', n: 'Neón «HOME»', p: 40000, b: (G, sc, rot) => { const t = ctex(512, 128, g => neonText(g, 'HOME', 256, 66, 80, '#fff', '#ff3d9a')).tex; const p = plane(2.4, .6, t, { transparent: true }); const [x, z] = rot ? [2.9, 4.68] : [-2.9, -4.68]; p.position.set(x, 3.2, z); p.rotation.y = rot ? Math.PI : 0; return p; } },
+  { id: 'aquarium', n: 'Acuario tropical', p: 300000, c: [[-.4, 1.4, -4.7, -4.0]], b: G => { G.box(-.4, 0, -4.6, 1.4, .8, -4.0, '#222'); G.box(-.35, .8, -4.55, 1.35, 1.7, -4.05, '#2a8aca', { lit: false }); G.box(.1, 1.0, -4.3, .3, 1.1, -4.25, '#ff8a2a', { lit: false }); G.box(.8, 1.3, -4.3, 1, 1.38, -4.25, '#ffcf3a', { lit: false }); } },
+  { id: 'arcade', n: 'Máquina arcade', p: 250000, c: [[3.9, 4.7, -.9, .3]], b: G => { G.box(3.95, 0, -.85, 4.65, 1.9, .25, '#2a1a4a'); G.rect('w', 3.94, -.75, .15, 1.05, 1.65, '#3ff2ff', false, .01); G.box(3.7, .95, -.75, 3.95, 1.05, .15, '#ff3d9a'); },
+    f: it => Object.assign(it, { label: 'Máquina arcade', sub: 'Tragaperras clásica en casa', fn: () => UI.open('fruit') }), at: [3.2, -.3] },
+  { id: 'piano', n: 'Piano de cola', p: 900000, c: [[-4.7, -2.9, 2.5, 4.3]], b: G => { G.box(-4.6, 0, 2.6, -3.0, .95, 4.2, '#0b0b10', { top: '#151520' }); G.box(-3.1, .95, 2.7, -3.0, 1.6, 4.1, '#0b0b10'); G.box(-3.02, .7, 2.8, -2.85, .78, 4.0, '#f4f4f4'); },
+    f: it => Object.assign(it, { label: 'Tocar el piano', sub: 'Una melodía', fn: () => { ['win', 'chip', 'win'].forEach((s, i) => setTimeout(() => Sfx.play(s), i * 260)); UI.toast('¡Bravo! Has tocado una pieza preciosa', 'good'); } }), at: [-2.4, 3.4] },
+  { id: 'statue', n: 'Estatua de oro', p: 5000000, c: [[3.3, 4.3, 3.3, 4.3]], b: G => { G.box(3.3, 0, 3.3, 4.3, .5, 4.3, '#f2f0ec'); G.cyl(3.8, .5, 3.8, .25, 1.2, 10, '#ffcf3a', { r2: .18 }); G.cyl(3.8, 1.7, 3.8, .22, .4, 10, '#ffd84a'); } },
+];
+
+const Homes = {
+  st() { const s = Prog.s; if (!s.homes) s.homes = {}; return s.homes; },
+  rec(id) { return this.st()[id] || null; },
+  /** ¿Puedes entrar? (comprada, alquilada en vigor o visita en curso) */
+  access(id) { const r = this.rec(id); if (r && (r.m === 'buy' || (r.m === 'rent' && r.until > Date.now()))) return true; return (this.visit && this.visit.id === id && this.visit.until > performance.now()); },
+  owned(id) { const r = this.rec(id); return !!(r && r.m === 'buy'); },
+  furnVal(r) { let v = 0; for (const k in (r && r.furn) || {}) { const f = FURN.find(x => x.id === k); if (f) v += f.p; } return v; },
+  /** Patrimonio: casas compradas y muebles (para el estatus de riqueza) */
+  assets() { let v = 0; for (const h of HOMES) { const r = this.rec(h.id); if (!r) continue; if (r.m === 'buy') v += h.price; v += this.furnVal(r); } return v; },
+  count() { return HOMES.filter(h => this.owned(h.id)).length; },
+  furnCount() { let n = 0; for (const h of HOMES) n += Object.keys((this.rec(h.id) || {}).furn || {}).length; return n; },
+
+  /** Pasos de carga: un interior por casa */
+  steps() {
+    return HOMES.map(h => {
+      World.defPlace(h.id, { off: [h.x, 0, h.cz], zone: [h.x - 5.2, h.x + 5.2, h.cz - 5.2, h.cz + 5.2] });
+      return [h.id, () => this.buildInterior(h)];
+    });
+  },
+  buildInterior(h) {
+    const rot = h.s > 0, wall = h.neon ? { base: '#1e1c2c', top: '#2a2840', dado: '#14121e', gold: '#ff3d9a', neon: h.neon } : h.gold ? { base: '#f4ecd8', top: '#c8b88a', dado: '#e0d0a8', gold: '#c89a3a', neon: '#ffe8a0' } : { base: '#efe6d8', top: '#c8b89a', dado: '#c9a77a', gold: '#a07a4a', neon: '#ffd9a0' };
+    const sc = buildFloor({
+      id: h.id, label: h.n.toUpperCase(), music: 'premier', ox: 0, oz: 0, hx: 4.8, hz: 4.8, h: 4.7, fog: [0x1a1420, 30, 80], amb: [[.6, .56, .52], [.34, .3, .28], [.1, .1, .1]],
+      doorS: rot ? 0 : .9, doorN: rot ? .9 : 0,
+      carpet: { base: h.neon ? '#2a2236' : '#9a7048', line: h.neon ? 'rgba(255,61,154,.25)' : 'rgba(60,40,20,.3)', dot: 'rgba(255,230,190,.07)' }, wall,
+      lights: lt => { lt(0, 3.6, 0, '#ffe8c8', 9, 1.25); lt(-2.8, 3, -2.6, '#ffdcb0', 6, .8); lt(2.8, 3, 2.6, '#ffdcb0', 6, .8); if (h.neon) lt(0, 2, 0, h.neon, 7, .7); },
+    }, k => {
+      const { sc } = k;
+      sc.cam = { pitch: .82, dist: 9.5, min: 5, max: 13 };
+      // la puerta da a la calle: se sale caminando por ella
+      if (rot) { sc.colliders.push({ x0: -5.4, x1: -.9, z0: -7, z1: -4.6 }, { x0: .9, x1: 5.4, z0: -7, z1: -4.6 }); sc.bounds.z0 = -6.8; }
+      else { sc.colliders.push({ x0: -5.4, x1: -.9, z0: 4.6, z1: 7 }, { x0: .9, x1: 5.4, z0: 4.6, z1: 7 }); sc.bounds.z1 = 6.8; }
+      const [tx, tz] = rot ? [-2.2, -4.2] : [2.2, 4.2];
+      k.G.box(tx - .3, 1.2, tz + (rot ? -.32 : .22), tx + .3, 1.7, tz + (rot ? -.22 : .32), '#111', {}); k.gl3.add(tx, 1.45, tz, '#3ff2ff', .35);
+      sc.interact.push({ x: tx, z: tz + (rot ? .6 : -.6), r: 1.5, label: 'Tablet de la casa', sub: 'Muebles, alquiler y venta', fn: () => this.tablet(h) });
+    });
+    sc.home = h; this.scenes = this.scenes || {}; this.scenes[h.id] = sc;
+    this.furnish(h, sc);
+    return sc;
+  },
+  /** Coloca los muebles comprados (se rehace al comprar o vender) */
+  furnish(h, sc) {
+    sc = sc || (this.scenes || {})[h.id]; if (!sc) return;
+    if (sc.furnG) { sc.group.remove(sc.furnG); sc.furnG.traverse(n => { n.geometry && n.geometry.dispose(); }); }
+    sc.colliders = sc.colliders.filter(c => !c.furn); sc.interact = sc.interact.filter(i => !i.furn);
+    const rot = h.s > 0, tr = (x, z) => rot ? [-x, -z] : [x, z];
+    const own = (this.rec(h.id) || {}).furn || {}, grp = new THREE.Group(); sc.furnG = grp; sc.group.add(grp);
+    const sv = Bake.lights; Bake.lights = sc.lights;
+    withAmbient([.6, .56, .52], [.34, .3, .28], [.1, .1, .1], () => {
+      const G = new Geo(); G.setXf(0, 0, 0, rot ? Math.PI : 0);
+      for (const f of FURN) {
+        if (!own[f.id]) continue;
+        const extra = f.b(G, sc, rot); if (extra) grp.add(extra);
+        for (const [a, b, c, d] of f.c || []) { const [x0, z0] = tr(a, c), [x1, z1] = tr(b, d); sc.colliders.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), furn: true }); }
+        if (f.f) { const [x, z] = tr(f.at[0], f.at[1]); sc.interact.push(f.f({ x, z, r: 1.4, furn: true })); }
+      }
+      if (G.pos.length) grp.add(G.build());
+    });
+    Bake.lights = sv;
+  },
+  /** Fachadas, jardines y carteles en la calle (se llama al construir la ciudad) */
+  exterior(sc) {
+    this.signs = {};
+    buildFloor({ extend: sc, ox: 0, oz: 0, amb: [Bake.sky, Bake.gnd, Bake.dirC], lights: lt => { for (const h of HOMES) lt(h.x, 3, h.fz - h.s * 1.2, h.neon || '#ffd9a0', 6, .8); } }, k => {
+      const G = k.G;
+      for (const h of HOMES) {
+        const { x: cx, cz, fz, s, H } = h, x0 = cx - 5.2, x1 = cx + 5.2, z0 = cz - 5.2, z1 = cz + 5.2, front = s < 0 ? 's' : 'n', back = s < 0 ? 'n' : 's';
+        const gz0 = Math.min(fz, s * 6.2), gz1 = Math.max(fz, s * 6.2), fence = s * 6.2;
+        // casa: paredes con hueco de puerta
+        G.box(x0, 0, z0, cx - .9, H, z1, h.col, { top: h.roof }); G.box(cx + .9, 0, z0, x1, H, z1, h.col, { top: h.roof });
+        if (s < 0) G.box(cx - .9, 0, z0, cx + .9, H, z1 - .4, h.col, { top: h.roof }); else G.box(cx - .9, 0, z0 + .4, cx + .9, H, z1, h.col, { top: h.roof });
+        G.box(cx - .9, 3.2, s < 0 ? z1 - .4 : z0, cx + .9, H, s < 0 ? z1 : z0 + .4, h.col);
+        G.box(x0 - .35, H, z0 - .35, x1 + .35, H + .3, z1 + .35, h.roof); G.box(x0 + 1, H + .3, z0 + 1, x1 - 1, H + 1.1, z1 - 1, h.roof, { top: h.neon ? '#2a2840' : h.roof });
+        // marco de la puerta y luz del porche
+        for (const dx of [-1.05, .9]) G.box(cx + dx, 0, fz - .1, cx + dx + .15, 3.3, fz + .1, h.gold ? '#c89a3a' : '#3a2a20');
+        G.floor(cx - .9, s < 0 ? fz - .4 : fz, cx + .9, s < 0 ? fz : fz + .4, .02, '#1a1418', false);
+        k.gl3.add(cx, 3.5, fz - s * .2, h.neon || '#ffd9a0', .6);
+        // ventanas
+        const win = (face, at, a0, a1, y0) => { for (let a = a0; a + 1.3 <= a1; a += 2.3) G.rect(face, at, a, a + 1.3, y0, y0 + 1.4, h.neon ? '#ff6ac0' : '#ffd89a', false, .03); };
+        win(front, fz, x0 + .8, cx - 1.6, 1.2); win(front, fz, cx + 1.6, x1 - .4, 1.2); if (h.two) win(front, fz, x0 + .8, x1 - .4, 4.2);
+        win('e', x1, z0 + 1, z1 - 1, 1.4); win('w', x0, z0 + 1, z1 - 1, 1.4); win(back, s < 0 ? z0 : z1, x0 + 1, x1 - 1, 1.4);
+        if (h.neon) { for (let x = x0; x <= x1; x += .8) k.gl1.add(x, H + .2, fz - s * .38, h.neon, .45); }
+        if (h.gold) for (const dx of [-2.2, 2.2]) { G.cyl(cx + dx, 0, fz - s * .6, .22, H - .1, 10, '#f4ecd8'); k.sc.circles.push({ x: cx + dx, z: fz - s * .6, r: .3 }); }
+        // jardín, camino, valla y buzón
+        G.floor(x0, gz0, x1, gz1, .015, '#2f6a3a', true); G.floor(cx - .8, gz0, cx + .8, gz1, .025, '#b8ae9c', true);
+        for (const [a, b] of [[x0, cx - .9], [cx + .9, x1]]) { G.box(a, 0, fence - .08, b, .7, fence + .08, '#e8e4dc'); k.sc.colliders.push({ x0: a, x1: b, z0: fence - .15, z1: fence + .15, h: .7 }); }
+        for (const xx of [x0 - .3, x1]) { G.box(xx, 0, gz0, xx + .3, 1, gz1, '#2a6a3a', { top: '#348048' }); k.sc.colliders.push({ x0: xx, x1: xx + .3, z0: gz0, z1: gz1, h: 1 }); }
+        G.cyl(cx - 3.4, 0, (fz + fence) / 2, .5, 1.1, 7, '#2a7a3a', { r2: .2 }); k.sc.circles.push({ x: cx - 3.4, z: (fz + fence) / 2, r: .55 });
+        G.box(cx + 1.3, 0, fence - s * .3 - .1, cx + 1.45, 1, fence - s * .3 + .1, '#333'); G.box(cx + 1.1, 1, fence - s * .3 - .2, cx + 1.65, 1.35, fence - s * .3 + .2, '#c8102e');
+        // colisiones de la casa (la puerta queda libre)
+        k.sc.colliders.push({ x0, x1: cx - .9, z0, z1, h: H }, { x0: cx + .9, x1, z0, z1, h: H }, s < 0 ? { x0: cx - .9, x1: cx + .9, z0, z1: z1 - .4, h: H } : { x0: cx - .9, x1: cx + .9, z0: z0 + .4, z1, h: H });
+        // cartel de venta (cambia al comprarla o alquilarla)
+        const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128; const tex = new THREE.CanvasTexture(cv);
+        const sp = plane(1.6, .8, tex, { double: true }); sp.position.set(cx + 3.2, 1.5, fence - s * .05); k.sc.group.add(sp);
+        G.box(cx + 3.15, 0, fence - s * .05 - .05, cx + 3.25, 1.1, fence - s * .05 + .05, '#3a2a20');
+        this.signs[h.id] = { cv, tex }; this.drawSign(h);
+        k.sc.interact.push({ x: cx, z: fz - s * 1.3, r: 1.9, get label() { return Homes.access(h.id) ? h.n : h.n + ' · ' + (Homes.rec(h.id) && Homes.rec(h.id).m === 'rent' ? 'alquiler caducado' : 'en venta'); }, get sub() { return Homes.access(h.id) ? (Homes.owned(h.id) ? 'Tu casa · entra por la puerta' : 'Alquilada · entra por la puerta') : 'Comprar ' + fmt(h.price) + ' · alquilar ' + fmt(h.rent) + '/semana · visitar'; }, fn: () => Homes.door(h) });
+      }
+      // muros traseros: el barrio no se sale por detrás
+      for (const s of [-1, 1]) { G.box(-99, 0, s * 21.4, -48.8, 2.2, s * 21.4 + s * .4, '#4a4452', { top: '#3a3442' }); k.sc.colliders.push({ x0: -99, x1: -48.8, z0: Math.min(s * 21.4, s * 21.8), z1: Math.max(s * 21.4, s * 21.8) }); }
+      k.sign('BARRIO RESIDENCIAL', '#ffd9a0', 4.6, [-44, 3.4, -5.7], 0);
+      G.box(-44.1, 0, -5.9, -43.9, 2.9, -5.7, '#2a2a33');
+    });
+    const prev = sc.dynamic; sc.dynamic = () => { const a = prev ? prev() : []; for (const h of HOMES) if (!this.access(h.id)) a.push({ x0: h.x - .9, x1: h.x + .9, z0: h.fz - .25, z1: h.fz + .25 }); return a; };
+  },
+  drawSign(h) {
+    const S = (this.signs || {})[h.id]; if (!S) return; const g = S.cv.getContext('2d'), r = this.rec(h.id);
+    const mine = this.access(h.id), [bg, t1, t2] = mine ? ['#1f7a4a', this.owned(h.id) ? 'TU CASA' : 'ALQUILADA', h.n] : r && r.m === 'rent' ? ['#8a5a10', 'RENUEVA', 'alquiler caducado'] : ['#c8102e', 'SE VENDE', fmt(h.price)];
+    g.fillStyle = bg; g.fillRect(0, 0, 256, 128); g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(6, 6, 244, 116);
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = `bold 40px ${FONT_U}`; g.fillText(t1, 128, 58); g.font = `26px ${FONT_U}`; g.fillText(t2.slice(0, 18), 128, 98); S.tex.needsUpdate = true;
+  },
+  /** Ventana al llegar a la puerta */
+  door(h) {
+    const r = this.rec(h.id), acc = this.access(h.id);
+    const days = r && r.m === 'rent' ? Math.max(0, Math.ceil((r.until - Date.now()) / DAY_MS)) : 0;
+    UI.modal(`<h2>${h.n}</h2><p style="color:var(--muted);margin:0 0 10px">Barrio Residencial · ${h.two ? 'dos plantas' : 'una planta'} · jardín propio</p>
+      <div class="hm-row"><span>Precio de compra</span><b>${fmt(h.price)}</b></div><div class="hm-row"><span>Alquiler (7 días)</span><b>${fmt(h.rent)}</b></div>
+      ${r ? `<div class="hm-row"><span>Estado</span><b>${r.m === 'buy' ? 'Es tuya' : days ? 'Alquilada · quedan ' + days + ' días' : 'Alquiler caducado'}</b></div><div class="hm-row"><span>Muebles</span><b>${Object.keys(r.furn || {}).length} · ${fmt(this.furnVal(r))}</b></div>` : ''}
+      <div class="hm-act">${acc ? '<button class="btn primary" data-in>Entrar</button>' : '<button class="btn" data-visit>Visitar 1 minuto (gratis)</button>'}
+      ${r && r.m === 'buy' ? '' : `<button class="btn primary" data-buy ${Wallet.cents < h.price ? 'disabled' : ''}>Comprar ${fmt(h.price)}</button><button class="btn" data-rent ${Wallet.cents < h.rent ? 'disabled' : ''}>${r && r.m === 'rent' ? 'Pagar 7 días más' : 'Alquilar 7 días'} · ${fmt(h.rent)}</button>`}</div>
+      <p style="color:var(--muted);font-size:13px">Las casas compradas suman a tu patrimonio y a tu estatus de riqueza. Los muebles se compran dentro, en la tablet.</p>`, c => {
+      const q = s => c.querySelector(s);
+      q('[data-in]') && (q('[data-in]').onclick = () => { UI.closeModal(); World.walkTo(h.x, h.cz); });
+      q('[data-visit]') && (q('[data-visit]').onclick = () => { this.visit = { id: h.id, until: performance.now() + 60000 }; UI.closeModal(); UI.toast('Visita abierta durante 1 minuto: entra por la puerta', 'good'); World.walkTo(h.x, h.cz); setTimeout(() => { if (this.visit && this.visit.id === h.id && World.scene.id === h.id && !this.access(h.id)) { World.walkTo(h.x, h.fz - h.s * 1.5); UI.toast('Se acabó la visita', ''); } }, 61000); });
+      q('[data-buy]') && (q('[data-buy]').onclick = () => { if (!Wallet.spend(h.price, h.n)) return; const o = this.st()[h.id] || { furn: {} }; o.m = 'buy'; o.until = 0; this.st()[h.id] = o; this.changed(h); UI.closeModal(); UI.toast('¡Enhorabuena! ' + h.n + ' ya es tuya', 'good'); Sfx.play('win'); });
+      q('[data-rent]') && (q('[data-rent]').onclick = () => { if (!Wallet.spend(h.rent, h.n + ' (alquiler)')) return; const o = this.st()[h.id] || { furn: {} }; o.m = 'rent'; o.until = Math.max(Date.now(), o.until || 0) + RENT_DAYS * DAY_MS; this.st()[h.id] = o; this.changed(h); UI.closeModal(); UI.toast('Alquilada hasta el ' + new Date(o.until).toLocaleDateString('es-ES'), 'good'); Sfx.play('chip'); });
+    });
+    UI.modal && $('#modal').classList.add('right');
+  },
+  /** Tablet dentro de casa: muebles, alquiler y venta */
+  tablet(h) {
+    const draw = c => {
+      const r = this.rec(h.id); if (!r || !this.access(h.id)) { c.innerHTML = '<h2>' + h.n + '</h2><p>Estás de visita. Compra o alquila la casa para amueblarla.</p>'; return; }
+      const own = r.furn || (r.furn = {});
+      c.innerHTML = `<h2>${h.n}</h2><p style="color:var(--muted);margin:0 0 8px">${r.m === 'buy' ? 'Propietario · valor ' + fmt(h.price + this.furnVal(r)) : 'Alquilada hasta el ' + new Date(r.until).toLocaleDateString('es-ES')}</p>
+        <div class="hm-list">${FURN.map(f => `<div class="hm-row"><span>${f.n}</span>${own[f.id] ? `<button class="btn sm" data-sell="${f.id}">Vender ${fmt(Math.round(f.p / 2))}</button>` : `<button class="btn sm primary" data-buyf="${f.id}" ${Wallet.cents < f.p ? 'disabled' : ''}>${fmt(f.p)}</button>`}</div>`).join('')}</div>
+        <div class="hm-act">${r.m === 'buy' ? `<button class="btn danger" data-sellh>Vender la casa · ${fmt(Math.round(h.price * .8))}</button>` : `<button class="btn" data-renew ${Wallet.cents < h.rent ? 'disabled' : ''}>Pagar 7 días más · ${fmt(h.rent)}</button>`}</div>`;
+      $$('[data-buyf]', c).forEach(b => b.onclick = () => { const f = FURN.find(x => x.id === b.dataset.buyf); if (!Wallet.spend(f.p, 'Muebles')) return; own[f.id] = 1; this.changed(h); Sfx.play('chip'); draw(c); });
+      $$('[data-sell]', c).forEach(b => b.onclick = () => { const f = FURN.find(x => x.id === b.dataset.sell); delete own[f.id]; Wallet.grant(Math.round(f.p / 2), 'Venta de muebles'); this.changed(h); draw(c); });
+      const sh = c.querySelector('[data-sellh]'); sh && (sh.onclick = () => { const v = Math.round(h.price * .8) + Math.round(this.furnVal(r) / 2); delete this.st()[h.id]; Wallet.grant(v, 'Venta de ' + h.n); this.changed(h); UI.closeModal(); UI.toast('Casa vendida por ' + fmt(v) + ' (muebles incluidos)', 'good'); World.walkTo(h.x, h.fz - h.s * 1.5); });
+      const rn = c.querySelector('[data-renew]'); rn && (rn.onclick = () => { if (!Wallet.spend(h.rent, h.n + ' (alquiler)')) return; r.until = Math.max(Date.now(), r.until) + RENT_DAYS * DAY_MS; this.changed(h); draw(c); });
+    };
+    UI.modal('', draw); $('#modal').classList.add('right');
+  },
+  changed(h) { Prog.save(); this.drawSign(h); this.furnish(h); Prog.check && Prog.check(); Prog.render && Prog.render(); },
+};
+ACHS.push(['home1', 'Propietario', 'Compra tu primera casa', () => Homes.count() >= 1], ['home5', 'Decorador', 'Compra 5 muebles', () => Homes.furnCount() >= 5]);
 
 /* ---- 99_main.js ---- */
 /* =====================================================================

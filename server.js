@@ -35,7 +35,7 @@ wss.on('connection', ws => {
       const id = String(m.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 16) || 'p' + Math.random().toString(36).slice(2, 10);
       const old = players.get(id); if (old && old.ws !== ws) try { old.ws.close(); } catch (e) { }
       me = { id, ws, state: { id, name: clean(m.name), scene: 'city', x: 0, y: 0, z: 0, ry: 0, mv: 0, m: 0, car: null }, lk: '', dirty: true, lkDirty: true, n: 0, t0: Date.now() };
-      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, bizMsg()); send(ws, sugMsgFor(id)); send(ws, { t: 'news', list: DB.news }); if (DB.el.votes[id]) send(ws, { t: 'myvote', id: DB.el.votes[id] }); if (DB.refunds[id]) { give(me, DB.refunds[id], 'Devolución pendiente'); delete DB.refunds[id]; saveDb(); } if (UFO) send(ws, { t: 'ufo', at: Date.now() - UFO.at, x: UFO.x, z: UFO.z }); send(ws, { t: 'ver', v: VER }); for (const k in RL) send(ws, rlMsg(k)); send(ws, occMsg()); for (const [k, L] of LIVE) send(ws, Object.assign({ t: 'live', k }, L)); return;
+      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, bizMsg()); send(ws, sugMsgFor(id)); send(ws, { t: 'news', list: DB.news }); if (DB.el.votes[id]) send(ws, { t: 'myvote', id: DB.el.votes[id] }); if (DB.refunds[id]) { give(me, DB.refunds[id], 'Devolución pendiente'); delete DB.refunds[id]; saveDb(); } if (CAB) send(ws, cabMsg()); if (UFO) send(ws, { t: 'ufo', at: Date.now() - UFO.at, x: UFO.x, z: UFO.z }); send(ws, { t: 'ver', v: VER }); for (const k in RL) send(ws, rlMsg(k)); send(ws, occMsg()); for (const [k, L] of LIVE) send(ws, Object.assign({ t: 'live', k }, L)); return;
     }
     if (!me) return;
     // límite de mensajes por segundo
@@ -72,6 +72,7 @@ wss.on('connection', ws => {
     else if (m.t === 'sugpost') sugPost(me, m);
     else if (m.t === 'sugvote') sugVote(me, m);
     else if (m.t === 'ufoclaim') ufoClaim(me, m);
+    else if (m.t === 'cabpick') cabPick(me, m);
     else if (m.t === 'jxbet') {
       const c = Math.round(num(m.c, 1e12));
       if (JX.ph !== 'wait' || c <= 0 || JX.bets.has(me.id)) { send(ws, { t: 'jxno', c }); return; }
@@ -203,15 +204,16 @@ function chat(me, m) {
 }
 function command(me, txt) {
   const [cmd, ...a] = txt.split(/\s+/), sys = t => send(me.ws, { t: 'chat', sys: true, txt: t });
-  if (cmd === '/help' || cmd === '/ayuda') return sys('Comandos: /online · /w NOMBRE mensaje (privado) · /givemoney NOMBRE CANTIDAD CONTRASEÑA (administración)');
+  if (cmd === '/help' || cmd === '/ayuda') return sys('Comandos: /online · /w NOMBRE mensaje (privado) · /givemoney NOMBRE CANTIDAD CONTRASEÑA · /ufo CONTRASEÑA · /ayuntamiento CONTRASEÑA (administración)');
   if (cmd === '/online') return sys('Conectados (' + players.size + '): ' + [...players.values()].map(p => p.state.name).join(', '));
   if (cmd === '/w' || cmd === '/msg') { const p = byName(a[0]); if (!p) return sys('No hay nadie conectado con ese nombre'); return chat(me, { txt: a.slice(1).join(' '), to: p.id }); }
-  if (cmd === '/givemoney' || cmd === '/ufo') {
+  if (cmd === '/givemoney' || cmd === '/ufo' || cmd === '/ayuntamiento') {
     const now = Date.now(); me.adm = (me.adm || []).filter(t => now - t < 600000); if (me.adm.length >= 5) return sys('Demasiados intentos. Espera 10 minutos.');
     const pass = a[a.length - 1];
     if (!ADMIN) return sys('La administración no está activada en este servidor (falta ADMIN_PASS en Render)');
     if (pass !== ADMIN) { me.adm.push(now); return sys('Contraseña incorrecta'); }
     if (cmd === '/ufo') { ufoStart(); return sys('OVNI en camino'); }
+    if (cmd === '/ayuntamiento') return sys(cabStart() ? 'Pleno del Ayuntamiento convocado' : 'Ya hay un pleno en marcha');
     const p = byName(a[0]), c = Math.round(num(String(a[1] || '').replace(',', '.'), 1e9) * 100);
     if (!p || !(c > 0) || a.length < 3) return sys('Uso: /givemoney NOMBRE CANTIDAD CONTRASEÑA (el jugador tiene que estar conectado)');
     give(p, c, 'Administración'); console.log('givemoney', me.state.name, '->', p.state.name, c); return sys('Has dado ' + (c / 100).toFixed(2) + ' € a ' + p.state.name);
@@ -224,6 +226,39 @@ function sugMsgFor(id) { return { t: 'sug', list: DB.sug.slice(0, 60).map(s => (
 function sugAll() { for (const p of players.values()) send(p.ws, sugMsgFor(p.id)); }
 function sugPost(me, m) { const txt = String(m.txt || '').replace(/[<>]/g, '').trim().slice(0, 280); if (txt.length < 5) return; const now = Date.now(); if (now - (me.lastSug || 0) < 120000) return send(me.ws, { t: 'chat', sys: true, txt: 'Espera 2 minutos entre sugerencias' }); me.lastSug = now; DB.sug.unshift({ id: now.toString(36) + Math.random().toString(36).slice(2, 5), a: me.state.name, pid: me.id, txt, at: now, v: [] }); DB.sug = DB.sug.slice(0, 200); saveDb(); sugAll(); }
 function sugVote(me, m) { const s = DB.sug.find(x => x.id === m.id); if (!s || s.v.includes(me.id)) return; s.v.push(me.id); DB.sug.sort((a, b) => b.v.length - a.v.length || b.at - a.at); saveDb(); sugAll(); }
+
+
+// ---------- Pleno del Ayuntamiento (/ayuntamiento CONTRASEÑA): teletransporta a todos y el alcalde decide ----------
+const CABO = { reparto: 'Repartir el tesoro entre todos', suerte: 'Semana de suerte (0 % impuestos, +5 % premios)', ayuda: 'Ayuda diaria de 20 €', levy: 'Impuesto extraordinario de 3 € a todos', robo: 'Quedarme la mitad del tesoro', subida: 'Subir impuestos al máximo (15 %)' };
+const CABG = ['reparto', 'suerte', 'ayuda'];
+let CAB = null;
+function cabStart() {
+  if (CAB) return false; const m = DB.mayor && players.get(DB.mayor.id);
+  CAB = { end: Date.now() + 60000, votes: {}, vote: !m, mid: m ? DB.mayor.id : null };
+  broadcast(cabMsg()); news('🏛️ ¡Pleno extraordinario en el Ayuntamiento! ' + (m ? 'El alcalde ' + DB.mayor.n + ' tiene que decidir.' : 'No hay alcalde: decide el pueblo.'), 'alcaldia'); return true;
+}
+function cabMsg() { return { t: 'cab', left: CAB.end - Date.now(), vote: CAB.vote, mid: CAB.mid, mayor: DB.mayor ? DB.mayor.n : '', opts: CABO, good: CABG }; }
+function cabPick(me, m) {
+  if (!CAB) return; const k = String(m.k || ''); if (!CABO[k]) return;
+  if (CAB.vote) { CAB.votes[me.id] = k; send(me.ws, { t: 'chat', sys: true, txt: 'Voto registrado' }); return; }
+  if (me.id !== CAB.mid) return; cabEnd(k);
+}
+function cabEnd(k) {
+  const g = DB.gov, ps = [...players.values()], n = ps.length || 1; let txt = '';
+  if (!k) { const c = {}; for (const id in CAB.votes) c[CAB.votes[id]] = (c[CAB.votes[id]] || 0) + 1; k = Object.keys(c).sort((a, b) => c[b] - c[a])[0]; }
+  if (!k) txt = 'Nadie decidió nada y el pleno se cierra sin cambios.';
+  else {
+    const who = DB.mayor && !CAB.vote ? '👑 ' + DB.mayor.n : 'El pueblo';
+    if (k === 'reparto') { const a = Math.min(1000, Math.floor(g.treasury / n)); if (a > 0) { for (const p of ps) give(p, a, 'Reparto del ayuntamiento'); g.treasury -= a * n; } txt = who + ' reparte el tesoro: ' + (a / 100).toFixed(2) + ' € para cada ciudadano'; }
+    else if (k === 'suerte') { g.tax = 0; g.prize = 5; txt = who + ' declara la Semana de suerte: 0 % impuestos y +5 % en premios'; }
+    else if (k === 'ayuda') { g.aid = 2000; txt = who + ' aprueba una ayuda diaria de 20 € para todos'; }
+    else if (k === 'levy') { broadcast({ t: 'levy', c: 300 }); txt = who + ' impone un impuesto extraordinario de 3 € a todos'; }
+    else if (k === 'robo') { const mp = DB.mayor && players.get(DB.mayor.id), a = Math.floor(g.treasury / 2); if (mp && a > 0) { g.treasury -= a; give(mp, a, 'Desvío de fondos'); } txt = '💥 ESCÁNDALO: ' + (DB.mayor ? DB.mayor.n : 'alguien') + ' se queda con ' + (a / 100).toFixed(2) + ' € del tesoro'; }
+    else if (k === 'subida') { g.tax = 15; g.prize = 0; txt = who + ' sube los impuestos del casino al 15 %'; }
+    g.log.unshift({ txt: '🏛️ ' + txt, at: Date.now() }); g.log = g.log.slice(0, 30);
+  }
+  broadcast({ t: 'cabend', txt }); news('🏛️ ' + txt, 'alcaldia'); CAB = null; dirtyCity(); saveDb();
+}
 
 // ---------- Evento OVNI: cada 40-70 minutos (o con /ufo) aterriza en la ciudad ----------
 const UFO_SPOTS = [[0, 56], [0, 1], [-14, 116], [60, 2]];
@@ -246,6 +281,7 @@ setInterval(() => {
   else if (!DB.auc && Math.random() < .002) nextAuction();
   if (now >= ufoNext && players.size) ufoStart();
   if (UFO && now - UFO.at > 100000) UFO = null;
+  if (CAB && now >= CAB.end) cabEnd(CAB.vote ? null : '');
   if (cityD) { cityD = false; broadcast(cityMsg()); }
   if (bizD) { bizD = false; broadcast(bizMsg()); }
   if (topD && now - lastTop > 2000) { topD = false; lastTop = now; broadcast(topMsg()); }

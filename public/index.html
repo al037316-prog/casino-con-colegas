@@ -7187,6 +7187,33 @@ const Board = {
 };
 
 /* ---------------- Evento: OVNI ---------------- */
+// ---------- Pleno del Ayuntamiento: teletransporta a todos; el alcalde (o el pueblo) elige una decisión buena o mala ----------
+const Cab = {
+  el: null,
+  start(m) {
+    if (!World.scene || $('#hud').hidden) { setTimeout(() => this.start(m), 2000); return; }
+    this.m = m; this.end = performance.now() + m.left; this.done = false;
+    try { World.enter('sur', { x: (Math.random() - .5) * 10, z: 44, yaw: 0 }); } catch (e) {}
+    UI.close && UI.close();
+    Sfx.play('ding'); UI.toast('🏛️ ¡Pleno extraordinario! Te han llevado al Ayuntamiento', 'good');
+    if (!this.el) { this.el = document.createElement('div'); this.el.id = 'cab'; this.el.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:60;width:min(560px,94vw);background:rgba(20,12,40,.95);border:1px solid #c89a3a;border-radius:16px;padding:12px 14px;color:#fff;box-shadow:0 0 40px rgba(200,154,58,.35);text-align:center'; document.body.appendChild(this.el); }
+    this.draw(); clearInterval(this.iv); this.iv = setInterval(() => this.draw(true), 500);
+  },
+  draw(tick) {
+    const m = this.m, e = this.el; if (!e || this.done) return;
+    const left = Math.max(0, Math.ceil((this.end - performance.now()) / 1000)); if (left <= 0 && tick) { e.hidden = true; return; }
+    const mine = !m.vote && m.mid === Net.id, canPick = m.vote || mine;
+    if (tick && e.dataset.k === String(canPick) && e.querySelector('#cabT')) { e.querySelector('#cabT').textContent = left + ' s'; return; }
+    e.dataset.k = String(canPick); e.hidden = false;
+    e.innerHTML = `<div style="font-weight:800;font-size:18px;color:#ffcf5a">🏛️ PLENO DEL AYUNTAMIENTO · <span id="cabT">${left} s</span></div>
+      <div style="margin:4px 0 8px;font-size:14px">${m.vote ? 'No hay alcalde: <b>vota</b> una decisión (gana la más votada)' : mine ? '<b>Eres el alcalde. Elige:</b>' : '👑 <b>' + esc(m.mayor) + '</b> está decidiendo…'}</div>` +
+      (canPick ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${Object.entries(m.opts).map(([k, t]) => `<button class="btn sm ${m.good.includes(k) ? 'primary' : ''}" data-cab="${k}" style="text-align:left">${m.good.includes(k) ? '😇' : '😈'} ${esc(t)}</button>`).join('')}</div>` : `<small style="color:var(--muted)">Todo el mundo verá su decisión en las noticias.</small>`);
+    e.querySelectorAll('[data-cab]').forEach(b => b.onclick = () => { Net.transport.send({ t: 'cabpick', k: b.dataset.cab }); if (m.vote) { UI.toast('Voto enviado', 'good'); e.querySelectorAll('[data-cab]').forEach(x => x.style.opacity = x.dataset.cab === b.dataset.cab ? 1 : .45); } else e.hidden = true; });
+  },
+  finish(txt) { this.done = true; clearInterval(this.iv); if (this.el) this.el.hidden = true; UI.toast('🏛️ ' + txt, 'good'); Sfx.play('win'); FX.float(null, '🏛️ ¡DECISIÓN TOMADA!', '#ffcf5a', 30); },
+  levy(c) { const a = Math.min(c, Wallet.cents); if (a > 0 && Wallet.spend(a, 'impuesto')) Net.transport.send({ t: 'tax', c: a }); },
+};
+
 const Ufo = {
   on: false,
   start(x, z, elapsed = 0) {
@@ -7239,6 +7266,9 @@ setInterval(() => { if (Net.mode !== 'online' && !$('#hud').hidden && Math.rando
     if (m && m.t === 'news') { Board.news = m.list || []; if (Board.nb && (Board.news[0] || {}).at > Store.get('newsSeen', 0)) Board.nb.classList.add('new'); return; }
     if (m && m.t === 'sug') { Board.sug = m.list || []; if (Board.sugC && Board.sugC.isConnected && !Board.sugC.contains(document.activeElement)) Board.sugDraw(Board.sugC); return; }
     if (m && m.t === 'ufo') { Ufo.start(m.x, m.z, m.at || 0); return; }
+    if (m && m.t === 'cab') { Cab.start(m); return; }
+    if (m && m.t === 'cabend') { Cab.finish(m.txt); return; }
+    if (m && m.t === 'levy') { Cab.levy(m.c); return; }
     return _r.call(this, m);
   };
 }

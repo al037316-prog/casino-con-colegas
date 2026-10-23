@@ -45,6 +45,25 @@ CONTRASEÑA DE ADMINISTRACIÓN (/givemoney y /ufo)
   Guarda y Render se reinicia solo. En el chat del juego:
        /givemoney NOMBRE CANTIDAD CONTRASEÑA     (el jugador tiene que estar conectado)
        /ufo CONTRASEÑA                           (lanza el evento del OVNI)
+       /ayuntamiento CONTRASEÑA                  (pleno: lleva a todos al Ayuntamiento y el alcalde decide)
+
+CRIMEN, POLICÍA Y BIZUM (solo mayores de 18; todo ficticio)
+  - Al entrar por primera vez el juego pregunta "¿Eres mayor de edad?".
+  - Complejo de Seguridad (Distrito Norte, oeste): Comisaría, Cárcel, Armería y GrowShop.
+  - Solo puede haber UN policía y UN distribuidor a la vez (lo decide el servidor).
+    El distribuidor es secreto: nadie sabe quién es. Necesita una casa propia, compra
+    semillas y lámparas en el GrowShop, planta en su casa (2:30 min), cosecha y vende a los
+    compradores de la calle (seis puntos del mapa). Cada venta puede dejar una pista.
+  - El policía interroga testigos, inspecciona, registra casas (si hay plantas, es prueba
+    fuerte) y arresta. Hacen falta 5 puntos de pruebas que coincidan con el aspecto actual
+    del sospechoso. Detener a un inocente sin pruebas = pierde la placa 15 min, multa y cárcel.
+  - Detener bien al distribuidor: 5 min de cárcel, multa de 5.000 €, pierde su casa de cultivo
+    y el policía cobra una recompensa (5.000 € + más si el distribuidor lo puso difícil).
+  - Armas (pistola, AK, RPG) con licencia de la comisaría (600 €, 2 h). H sacar/guardar, F disparar.
+    Armado sin licencia o disparando en la calle = detención. No hacen daño a jugadores.
+  - Bizum en el móvil: transferencias entre jugadores con confirmación e historial.
+  - Pruebas del servidor: roles, pruebas, condenas, recompensas, ventas y precios los calcula el
+    servidor. Compras y saldo siguen en el navegador (ver AVISOS).
 
 GUARDADO PERMANENTE (recomendado, gratis)
   Render gratis borra los archivos al reiniciarse, así que elecciones, negocios, subastas,
@@ -54,6 +73,11 @@ GUARDADO PERMANENTE (recomendado, gratis)
      UPSTASH_REDIS_REST_TOKEN.
   3. En Render → Environment añade esas dos variables con sus valores. Listo.
   Al arrancar, el registro de Render dirá "guardado en Upstash".
+
+NOVEDADES v1.4 (calidad de vida)
+  - Subastas: 15 min, +1 min por puja, aviso en pantalla, devolución automática al ser superado.
+  - Guardado: escritura atómica, copia .bak y volcado al apagar (en Render gratis usa Upstash para
+    que los datos sobrevivan a reinicios y actualizaciones).
 
 AVISOS
   - Plan gratis: si nadie juega en 15 minutos el servidor se duerme; el primero que

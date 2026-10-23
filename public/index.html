@@ -1547,16 +1547,16 @@ function makeHuman(look) {
   const part = (fn) => { const g = new Geo(); fn(g); const m = g.build(mat); m.matrixAutoUpdate = true; return m; };
   const root = new THREE.Group();
   const body = new THREE.Group(); root.add(body);
-  const legL = part(g => { g.box(-.11, -.84, -.12, .11, 0, .12, look.pants, { faces: 'tnsewb' }); g.box(-.12, -.84, -.14, .12, -.72, .16, look.shoes, { faces: 'tnsew' }); });
+  const legL = part(g => { g.box(-.11, -.84, -.12, .11, 0, .12, look.lingerie ? look.skin : look.pants, { faces: 'tnsewb' }); if (look.lingerie) g.box(-.115, -.28, -.125, .115, 0, .125, look.lingerie); g.box(-.12, -.84, -.14, .12, -.72, .16, look.shoes, { faces: 'tnsew' }); });
   const legR = legL.clone(); legL.position.set(-.13, .86, 0); legR.position.set(.13, .86, 0);
   const torso = part(g => {
-    g.box(-.29, .84, -.16, .29, 1.56, .16, look.jacket || look.shirt);
+    g.box(-.29, .84, -.16, .29, 1.56, .16, look.lingerie ? look.skin : look.jacket || look.shirt); if (look.lingerie) { g.box(-.295, 1.22, -.165, .295, 1.44, .165, look.lingerie); g.box(-.295, .84, -.165, .295, .98, .165, look.lingerie); }
     if (look.jacket) { g.box(-.09, .86, .16, .09, 1.54, .175, look.shirt, { faces: 's' }); if (look.trim) { g.box(-.13, .9, .16, -.09, 1.54, .18, look.trim, { faces: 'se', lit: false }); g.box(.09, .9, .16, .13, 1.54, .18, look.trim, { faces: 'sw', lit: false }); } }
     if (look.apron) g.box(-.24, .9, .16, .24, 1.4, .18, '#f2f2f2', { faces: 'ts' });
     if (look.stripe) g.box(-.29, 1.22, .16, .29, 1.3, .17, look.stripe, { faces: 's' });
     if (look.chain) { g.box(-.15, 1.44, .16, -.11, 1.52, .19, look.chain, { faces: 'tsew', lit: false }); g.box(.11, 1.44, .16, .15, 1.52, .19, look.chain, { faces: 'tsew', lit: false }); g.box(-.11, 1.38, .16, .11, 1.43, .19, look.chain, { faces: 'tsewb', lit: false }); g.box(-.045, 1.27, .17, .045, 1.38, .2, look.gem || look.chain, { faces: 'tsewb', lit: false }); }
   });
-  const armMesh = (g, watch) => { g.box(-.085, -.62, -.085, .085, 0, .085, look.sleeve || look.jacket || look.shirt, { faces: 'tnsewb' }); g.box(-.08, -.72, -.08, .08, -.62, .08, look.skin, { faces: 'nsewb' }); if (watch) { g.box(-.092, -.62, -.092, .092, -.55, .092, look.watch, { faces: 'tnsewb', lit: false }); g.box(-.05, -.615, .092, .05, -.555, .1, look.dial || '#f4f4f4', { faces: 's', lit: false }); } };
+  const armMesh = (g, watch) => { g.box(-.085, -.62, -.085, .085, 0, .085, look.lingerie ? look.skin : look.sleeve || look.jacket || look.shirt, { faces: 'tnsewb' }); g.box(-.08, -.72, -.08, .08, -.62, .08, look.skin, { faces: 'nsewb' }); if (watch) { g.box(-.092, -.62, -.092, .092, -.55, .092, look.watch, { faces: 'tnsewb', lit: false }); g.box(-.05, -.615, .092, .05, -.555, .1, look.dial || '#f4f4f4', { faces: 's', lit: false }); } };
   const armL = part(g => armMesh(g, !!look.watch)), armR = part(g => armMesh(g, false)); armL.position.set(-.375, 1.52, 0); armR.position.set(.375, 1.52, 0);
   const head = part(g => {
     g.box(-.2, 0, -.2, .2, .4, .2, look.skin, { faces: 'tnsewb' });
@@ -1615,7 +1615,7 @@ const World = (() => {
     initMats(); GLOW_TEX = glowTexture(); BLOB_TEX = blobTexture();
     applyQuality(true);
     addEventListener('resize', resize); resize();
-    const steps = [['city', () => extendCity(buildCity())], ['avenida', buildAvenida], ['sur', buildSur], ['salera', buildSalera], ['sotano', buildSotano], ['casino', () => extendCasino(buildCasino())], ['premier', buildPremier], ['vip', buildVip], ['roof', buildRoof], ['burger', buildBurger], ...(typeof Homes !== 'undefined' ? Homes.steps() : []), ...(typeof Extra !== 'undefined' ? Extra.steps() : [])];
+    const steps = [['city', () => extendCity(buildCity())], ['avenida', buildAvenida], ['sur', buildSur], ['salera', buildSalera], ['sotano', buildSotano], ['casino', () => extendCasino(buildCasino())], ['premier', buildPremier], ['vip', buildVip], ['roof', buildRoof], ['burger', buildBurger], ...(typeof Homes !== 'undefined' ? Homes.steps() : []), ...(typeof Extra !== 'undefined' ? Extra.steps() : []), ...(typeof Sec !== 'undefined' ? Sec.steps() : [])];
     let i = 0;
     return new Promise(res => {
       const next = () => {
@@ -2000,7 +2000,7 @@ const World = (() => {
       let dr = p.tr - p.ry; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); p.ry += dr * k;
       if (p.car) { p.car.position.set(p.x, 0, p.z); p.car.rotation.y = p.ry; }
       else { p.h.root.position.set(p.x, p.y, p.z); p.h.root.rotation.y = p.ry; p.h.animate(dt, p.mv / 2.2, t); const sc = scenes[p.scene]; const [lx, lz] = loc(sc, p.x, p.z); p.h.light(lx, lz, sc.lights); }
-      p.tag.set(p.name, p.m, p.g, !!(City.mayor && City.mayor.id === p.id)); p.tag.sprite.position.set(p.x, p.y + (p.car ? 2.45 : 2.7), p.z);
+      { const pd = Net.peers.get(p.id) || {}, mk = !!(p.lk && p.lk.indexOf('"mk"') > 0); p.tag.set((CR.copId === p.id ? '👮 ' : '') + (mk ? '???' : p.name) + (pd.w ? ' 🔫' : ''), mk ? 0 : p.m, p.g, !!(City.mayor && City.mayor.id === p.id)); } p.tag.sprite.position.set(p.x, p.y + (p.car ? 2.45 : 2.7), p.z);
     }
   }
   function dropPeer(id) { const p = peers.get(id); if (!p) return; if (p.h) scene.remove(p.h.root); if (p.car) scene.remove(p.car); scene.remove(p.tag.sprite); peers.delete(id); }
@@ -2046,7 +2046,9 @@ const World = (() => {
   function start() {
     if (started) return; started = true;
     $('#fps').hidden = !Settings.fps;
-    enter('city'); setInputBlocked(false);
+    enter('city');
+    try { const h = typeof Homes !== 'undefined' && HOMES.find(x => Homes.owned(x.id) && scenes[x.id]); if (h) enter(h.id, { x: 0, z: 0, yaw: 0 }); } catch (e) { }
+    setInputBlocked(false);
     requestAnimationFrame(loop);
     showHint('<b>WASD</b> o clic en el suelo para caminar · <b>arrastra</b> para girar la cámara · <b>E</b> para interactuar. El casino está detrás de ti… y BURGER BOOM, al otro lado de la calle.', 14000);
   }
@@ -2085,7 +2087,7 @@ function buildCity() {
   const sc = {
     label: 'PLAZA DEL NEÓN', music: 'city', group: new THREE.Group(), colliders: [], circles: [], interact: [], anims: [], lights: [],
     cam: { pitch: .4, dist: 8.5, min: 4, max: 15 }, camCollide: true, fog: [0x1a1236, 40, 165],
-    bounds: { x0: -100, x1: 41, z0: -35, z1: 35 }, spawn: { x: 0, z: .5, yaw: 0 },
+    bounds: { x0: -100, x1: 41, z0: -35, z1: 35 }, spawn: { x: 6, z: -9, yaw: 0 },
   };
   const G = new Geo(), R = seeded(7);
   const gl1 = new Glows(1.1), gl3 = new Glows(3.4), gl8 = new Glows(9);
@@ -2619,6 +2621,7 @@ function buildCity() {
     });
     P.needsUpdate = true;
     // peatones
+    if (typeof Scare !== 'undefined' && Scare.t > 0) { Scare.t -= dt; for (const p of peds) if (p.active) { const ex = p.x - Scare.x, ez = p.z - Scare.z, ed = Math.hypot(ex, ez); if (ed < Scare.r) { p.x += ex / (ed || 1) * 3.4 * dt; p.z += ez / (ed || 1) * 3.4 * dt; p.ry = Math.atan2(ex, ez); } } }
     let active = peds.filter(p => p.active).length;
     for (const p of peds) {
       if (!p.active) { p.respawn -= dt; if (p.respawn <= 0 && active < pedMax) { route(p); p.active = true; p.h.root.visible = true; active++; p.h.root.scale.setScalar(.01); } continue; }
@@ -3507,9 +3510,10 @@ Games.roulette = {
         drawTable(); render();
         if (m.ph === 'closed') { big.textContent = 'NO VA MÁS'; big.className = 'big'; Sfx.play('tick'); }
         if (m.ph === 'spin' && !S.spinning) { S.bets.clear(); S.stack = []; anim(m.n); }
-        if (m.ph === 'bet' && !S.spinning) { S.mine.clear(); big.className = 'big'; render(); }
+        if (m.ph === 'bet' && !S.spinning && S.lph !== 'bet') { S.mine.clear(); big.className = 'big'; render(); }
+        S.lph = m.ph;
       };
-      RLN.cbs.add(S.cb);
+      S.lph = RT().ph; RLN.cbs.add(S.cb);
       S.cd = setInterval(() => { if (S.spinning) return; const T = RT(); if (T.ph === 'bet') { const l = Math.max(0, (15000 - (performance.now() - T.t0)) / 1000); big.textContent = l.toFixed(l < 5 ? 1 : 0).replace('.', ','); big.className = 'big' + (l < 5 ? ' rnum-red' : ''); } }, 100);
       S.rlno = c => { for (const [k, v] of S.mine) S.mine.delete(k); Wallet.refund(c, 'roulette'); UI.toast('La ruleta ya había empezado a girar: te devolvemos la apuesta', ''); render(); };
     }
@@ -5327,12 +5331,16 @@ const Env = (() => {
 
   // hora, ganancia, lift, brillo de neones, color de fondo/niebla
   const K = [
-    [0, [1, 1, 1.05], [0, 0, .01], 1, 0x1a1236], [5, [1.05, 1, 1.1], [0, 0, .012], 1, 0x2a1a44], [6.5, [1.3, 1.15, 1.1], [.03, .02, .03], .7, 0x8a5a6a],
+    [0, [1.14, 1.12, 1.22], [.02, .02, .045], 1, 0x261c4c], [5, [1.18, 1.12, 1.24], [.02, .02, .045], 1, 0x35245c], [6.5, [1.3, 1.15, 1.1], [.03, .02, .03], .7, 0x8a5a6a],
     [8.5, [1.5, 1.45, 1.4], [.06, .07, .1], .35, 0x8fb8e0], [13, [1.6, 1.55, 1.5], [.07, .08, .11], .25, 0x9cc8f0], [17, [1.5, 1.4, 1.3], [.06, .05, .07], .4, 0xe0a070],
-    [19, [1.3, 1.1, 1.1], [.03, .01, .03], .8, 0x8a3a5a], [21, [1.1, 1, 1.1], [0, 0, .01], 1, 0x1a1236], [24, [1, 1, 1.05], [0, 0, .01], 1, 0x1a1236],
+    [19, [1.3, 1.1, 1.1], [.03, .01, .03], .8, 0x8a3a5a], [21, [1.18, 1.12, 1.22], [.02, .02, .045], 1, 0x261c4c], [24, [1.14, 1.12, 1.22], [.02, .02, .045], 1, 0x261c4c],
   ];
   const WX = { clear: 'DESPEJADO', cloudy: 'NUBLADO', rain: 'LLUVIA', storm: 'TORMENTA', fog: 'NIEBLA' };
   const S = Object.assign({ t: 21.5, w: 'clear', next: 0 }, Store.get('env', {}));
+  // Reloj compartido por todos (según la hora real): ciclo de 18 min = 12 min de día (6-19 h) + 6 min de noche (19-6 h)
+  const CYC = 18 * 60000, DAYMS = 12 * 60000; S.off = 0;
+  const clock = () => { const n = Date.now() + S.off, cy = Math.floor(n / CYC), p = n % CYC; return cy * 24 + (p < DAYMS ? 6 + 13 * p / DAYMS : 19 + 11 * (p - DAYMS) / (CYC - DAYMS)); };
+  S.t = clock();
   const cur = { rain: 0, fog: 0, cloud: 0, flash: 0 };
   let rainMesh = null, rp = null, lastSave = 0, lastHud = 0, thunderAt = 0, nextBolt = 8, active = false;
   const c3 = h => new THREE.Color(h);
@@ -5358,14 +5366,14 @@ const Env = (() => {
   return {
     S, WX, get hour() { return S.t % 24; },
     timeStr() { const h = Math.floor(S.t % 24), m = Math.floor((S.t % 1) * 60); return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); },
-    sleep() { const h = S.t % 24; S.t += h < 8 ? 8 - h : 32 - h; },
+    sleep() { const p = (Date.now() + S.off) % CYC, p8 = 2 / 13 * DAYMS; S.off += (p8 - p + CYC) % CYC; S.t = clock(); },
     isNight() { const h = S.t % 24; return h < 6.5 || h > 19.5; },
     reset() { if (!Settings.weather) { clearFx(); if (active) World.refreshFog(); } },
     onEnter(id) { active = !!(World.scene && World.scene.outdoor); if (!active) clearFx(); },
     set(w) { S.w = w; S.next = S.t + 4; },
     update(dt, scene, sc) {
       if (!active || !Settings.weather) { if (active && !Settings.weather) clearFx(); return; }
-      S.t += dt / 30; if (!S.next) pickWeather(); if (S.t > S.next && S.next > 0) pickWeather();
+      S.t = clock(); if (!S.next) pickWeather(); if (S.t > S.next && S.next > 0) pickWeather();
       const w = S.w, k = Math.min(1, dt * .5);
       cur.rain += ((w === 'rain' ? .7 : w === 'storm' ? 1 : 0) - cur.rain) * k; cur.fog += ((w === 'fog' ? 1 : 0) - cur.fog) * k; cur.cloud += ((w === 'cloudy' ? .6 : w === 'rain' ? .8 : w === 'storm' ? 1 : w === 'fog' ? .5 : 0) - cur.cloud) * k;
       const sm = sample(S.t % 24), gray = cur.cloud, dark = 1 - .4 * cur.cloud - .25 * cur.rain;
@@ -5602,7 +5610,7 @@ const Phone = {
   head(t) { return `<div class="ph-head"><button class="ph-back" data-go="home">‹</button><h4>${t}</h4></div>`; },
   go(app) {
     this.app = app; const B = $('#phB'), s = this.st();
-    const apps = [['map', 'Mapa', '🗺️', '#2fbf71'], ['bank', 'Banco', '💳', '#d9a21a'], ['msg', 'Mensajes', '💬', '#1ea0d0'], ['ward', 'Armario', '👕', '#d02a7a'], ['rank', 'Ranking', '🏆', '#e0801a'], ['prof', 'Perfil', '⭐', '#8a3ad0'], ['news', 'Noticias', '📰', '#3a6ad0'], ['emo', 'Gestos', '🕺', '#3aa08a'], ['garage', 'Garaje', '🚗', '#c0392b'], ['race', 'Carreras', '🏁', '#222838'], ['contacts', 'Contactos', '👥', '#1a8ad0'], ['jobs', 'Trabajos', '💼', '#3a7a3a'], ['biz', 'Negocios', '🏪', '#2a9a8a'], ['city', 'Alcaldía', '🏛️', '#6a5acd'], ['cfg', 'Ajustes', '⚙️', '#5a6070']];
+    const apps = [['map', 'Mapa', '🗺️', '#2fbf71'], ['bank', 'Banco', '💳', '#d9a21a'], ['msg', 'Mensajes', '💬', '#1ea0d0'], ['ward', 'Armario', '👕', '#d02a7a'], ['rank', 'Ranking', '🏆', '#e0801a'], ['prof', 'Perfil', '⭐', '#8a3ad0'], ['news', 'Noticias', '📰', '#3a6ad0'], ['emo', 'Gestos', '🕺', '#3aa08a'], ['garage', 'Garaje', '🚗', '#c0392b'], ['race', 'Carreras', '🏁', '#222838'], ['contacts', 'Contactos', '👥', '#1a8ad0'], ['jobs', 'Trabajos', '💼', '#3a7a3a'], ['biz', 'Negocios', '🏪', '#2a9a8a'], ['city', 'Alcaldía', '🏛️', '#6a5acd'], ['bizum', 'Bizum', '💸', '#00a99d'], ...(CR.role === 'cop' ? [['crime', 'Policía', '👮', '#2a4aa0']] : CR.role === 'dealer' ? [['crime', 'Notas', '📝', '#555a66']] : []), ['cfg', 'Ajustes', '⚙️', '#5a6070']];
     let h = '';
     if (app === 'home') {
       h = `<div class="ph-clock"><b>${Env.timeStr()}</b><span>${World.scene.label} · ${eur(Wallet.cents)}</span></div><div class="ph-grid">` +
@@ -5640,6 +5648,8 @@ const Phone = {
     } else if (app === 'ward') { this.toggle(false); Style.wardrobe(); return; }
     else if (app === 'rank') { this.toggle(false); Hub.open('rank'); return; }
     else if (app === 'contacts') { this.toggle(false); Contacts.modal(); return; }
+    else if (app === 'bizum') { this.toggle(false); Bizum.modal(); return; }
+    else if (app === 'crime') { this.toggle(false); CR.role === 'cop' ? Cop.modal() : Dealer.modal(); return; }
     else if (app === 'jobs') { this.toggle(false); Jobs.board(); return; }
     else if (app === 'biz') { this.toggle(false); Biz.panel(); return; }
     else if (app === 'city') { this.toggle(false); City.modal(); return; }
@@ -5918,6 +5928,7 @@ const CARS = [
   { id: 'hyper', n: 'Royale Hyper', cat: 'Hiperdeportivo · edición limitada', price: 250000000, v: 58, a: 16, g: 1.25, L: 4.6, W: 2, H: .42, cab: .36, low: true, fins: true, req: { mem: 3 } },
 ];
 const CAR = Object.fromEntries(CARS.map(c => [c.id, c]));
+CAR.patrulla = { id: 'patrulla', n: 'Patrulla Neón', cat: 'Policía', price: 0, v: 34, a: 9, g: 1.05, L: 4.4, W: 1.85, H: .6, cab: .52, siren: true }; // solo la usa el policía de servicio
 const PAINTS = ['#d7263d', '#1b4fd8', '#f2f2f2', '#151515', '#ffcc00', '#3df58a', '#ff3d9a', '#7a2ad8', '#ff7f11', '#c0c4cc', '#e8b83a', '#0a8a8a'];
 const TUNE = {
   engine: { n: 'Motor', lv: [0, 400000, 900000, 2000000], txt: '+8 % velocidad y +12 % aceleración por nivel' },
@@ -5938,6 +5949,7 @@ function carGeo(m, col, t) {
   g.box(-L, y0, -W, L, y1, W, col, { faces: 'tnsewb' });
   g.box(-L * .45, y1, -W * .88, L * .25, y1 + cab, W * .88, '#141a28', { lit: false, faces: 'nsw' });
   g.box(-L * .45, y1 + cab, -W * .86, L * .25, y1 + cab + .05, W * .86, col, { faces: 't' });
+  if (m.siren) { g.box(-L * .15, y1 + cab + .05, -W * .45, L * .05, y1 + cab + .17, 0, '#ff2030', { lit: false }); g.box(-L * .15, y1 + cab + .05, 0, L * .05, y1 + cab + .17, W * .45, '#2a5aff', { lit: false }); g.box(-L, y0 + .2, -W - .01, L, y0 + .34, W + .01, '#1e3a8a', { lit: false, faces: 'nsew' }); }
   g.quad([L * .25, y1, -W * .88], [0, cab, 0], [0, 0, W * 1.76], '#2a3550', false);
   g.rect('e', L, -W * .9, -W * .45, y0 + .25, y0 + .45, '#fff7dc', false, .01); g.rect('e', L, W * .45, W * .9, y0 + .25, y0 + .45, '#fff7dc', false, .01);
   g.rect('w', -L, -W * .9, -W * .5, y0 + .25, y0 + .45, '#ff1a2a', false, .01); g.rect('w', -L, W * .5, W * .9, y0 + .25, y0 + .45, '#ff1a2a', false, .01);
@@ -6111,7 +6123,7 @@ Net.setLook = function (look) { this.lookStr = JSON.stringify(look); };
 // datos extra que viajan con la posición: dinero, ropa y coche
 const _sendState = Net.sendState;
 Net.sendState = function (s) {
-  s.m = Wallet.cents; s.lk = this.lookStr; s.g = UI.panelId || '';
+  s.m = Wallet.cents; s.w = (typeof Arms !== 'undefined' && Arms.cur) || ''; s.lk = this.lookStr; s.g = UI.panelId || '';
   if (World.driving && Vehicles.car) { const o = Vehicles.st().own[Vehicles.car.id]; s.car = Vehicles.car.id; s.cc = o.col; s.ct = o.t; } else s.car = null;
   _sendState.call(this, s);
 };
@@ -6269,6 +6281,9 @@ const Homes = {
       else { sc.colliders.push({ x0: -5.4, x1: -.9, z0: 4.6, z1: 7 }, { x0: .9, x1: 5.4, z0: 4.6, z1: 7 }); sc.bounds.z1 = 6.8; }
       const [tx, tz] = rot ? [-2.2, -4.2] : [2.2, 4.2];
       k.G.box(tx - .3, 1.2, tz + (rot ? -.32 : .22), tx + .3, 1.7, tz + (rot ? -.22 : .32), '#111', {}); k.gl3.add(tx, 1.45, tz, '#3ff2ff', .35);
+      { const [cx, cz] = rot ? [4, 0] : [-4, 0]; k.G.box(cx - .35, 0, cz - .9, cx + .35, 2.1, cz + .9, '#3a2a20', {}); k.gl3.add(cx + (rot ? -.4 : .4), 1.2, cz, '#b45cff', .3);
+        sc.colliders.push({ x0: cx - .4, x1: cx + .4, z0: cz - 1, z1: cz + 1, h: 2.1 });
+        sc.interact.push({ x: cx + (rot ? -1.1 : 1.1), z: cz, r: 1.4, get label() { return CR.role === 'dealer' ? 'Armario de cultivo' : CR.role === 'cop' ? 'Registrar la casa' : 'Armario'; }, get sub() { return CR.role === 'dealer' ? 'Plantar, cosechar y guardar' : CR.role === 'cop' ? 'Buscar pruebas (hay 15 s entre registros)' : 'Cambiarte de ropa'; }, fn: () => { if (CR.role === 'dealer') Dealer.modal(); else if (CR.role === 'cop') Cop.act('search'); else Style.wardrobe(); } }); }
       sc.interact.push({ x: tx, z: tz + (rot ? .6 : -.6), r: 1.5, label: 'Tablet de la casa', sub: 'Muebles, alquiler y venta', fn: () => this.tablet(h) });
     });
     sc.home = h; this.scenes = this.scenes || {}; this.scenes[h.id] = sc;
@@ -6505,15 +6520,29 @@ const Biz = {
   },
   lost(id) { const b = BIZ.find(x => x.id === id); if (!b || !this.st()[id]) return; delete this.st()[id]; Wallet.grant(b.p, 'Devolución de ' + b.n); Prog.save(); UI.toast('Ahora cada negocio tiene un solo dueño: ' + b.n + ' ya no es tuyo y te devolvemos ' + fmt(b.p), ''); },
   aucLeft() { const a = this.auc; if (!a) return ''; const l = Math.max(0, a.left - (performance.now() - a.at)), h = Math.floor(l / 36e5), mi = Math.floor(l % 36e5 / 6e4), se = Math.floor(l % 6e4 / 1e3); return h ? h + ' h ' + mi + ' min' : mi + ' min ' + se + ' s'; },
+  aucEv(m) {
+    const bad = m.k === 'out'; UI.toast(m.txt, bad ? 'bad' : m.k === 'end' ? 'good' : ''); if (m.k === 'start' || m.k === 'end' || bad) Sfx.play(bad ? 'lose' : 'win');
+    try { Chat.add && Chat.add({ sys: true, txt: m.txt }); } catch (e) { }
+    this.bar();
+  },
+  bar() {
+    let d = document.getElementById('aucBar');
+    if (!d) { d = document.createElement('div'); d.id = 'aucBar'; document.body.appendChild(d); }
+    const a = this.auc; if (!a || !this.online()) { d.style.display = 'none'; return; }
+    const b = BIZ.find(x => x.id === a.id); if (!b) { d.style.display = 'none'; return; }
+    const l = Math.max(0, a.left - (performance.now() - a.at)), mm = Math.floor(l / 6e4), ss = Math.floor(l % 6e4 / 1e3);
+    d.style.display = 'flex'; d.className = l < 6e4 ? 'hot' : '';
+    d.innerHTML = '<div class="ab-t">🔨 SUBASTA</div><div class="ab-n">' + b.n + '</div><div class="ab-p">' + fmt(a.top ? a.top.c : a.min) + '<small>' + (a.top ? esc(a.top.n) : 'precio inicial') + '</small></div><div class="ab-c">' + String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0') + '</div>';
+  },
   aucHtml() {
     const a = this.auc; if (!this.online()) return '<p class="note">Las subastas son entre jugadores reales: conéctate al servidor.</p>';
-    if (!a) return '<p class="note">Ahora mismo no hay subasta. Cada día sale a subasta un negocio sin dueño.</p>';
+    if (!a) return '<p class="note">Ahora mismo no hay subasta. Cada subasta dura 15 min y cada puja añade 1 min.</p>';
     const b = BIZ.find(x => x.id === a.id), need = a.top ? Math.ceil(a.top.c * 1.05) : a.min;
-    return `<div class="auc"><b>🔨 Subasta de hoy: ${b.n}</b><div class="hm-row"><span>Precio base / puja mínima</span><b>${fmt(a.min)}</b></div>
+    return `<div class="auc"><b>🔨 Subasta: ${b.n}</b><div class="hm-row"><span>Precio base / puja mínima</span><b>${fmt(a.min)}</b></div>
       <div class="hm-row"><span>Puja más alta</span><b>${a.top ? fmt(a.top.c) + ' · ' + esc(a.top.n) + (a.top.id === Net.id ? ' (tú)' : '') : 'Nadie ha pujado'}</b></div>
       <div class="hm-row"><span>Termina en</span><b>${this.aucLeft()}</b></div>
       <div class="hm-act"><input class="inp" id="bidIn" type="number" min="${need / 100}" step="1" value="${Math.ceil(need / 100)}" style="width:140px"><button class="btn primary" id="bidB">Pujar</button></div>
-      <small style="color:var(--muted)">El dinero de tu puja queda retenido. Si alguien te supera, se te devuelve. Si nadie puja, el negocio queda sin vender.</small></div>`;
+      <small style="color:var(--muted)">El dinero de tu puja queda retenido. Si alguien te supera, se te devuelve. Si nadie puja, se adjudica al precio inicial al Ayuntamiento y vuelve a salir.</small></div>`;
   },
   bindAuc(c, redraw) {
     const i = c.querySelector('#bidIn'), b = c.querySelector('#bidB'); if (!b) return; i.addEventListener('keydown', e => e.stopPropagation());
@@ -6572,6 +6601,7 @@ ACHS.push(['biz1', 'Empresario', 'Compra tu primer negocio', () => Biz.count() >
     if (m && m.t === 'biz') { Biz.onMsg(m); return; }
     if (m && m.t === 'bizno') { if (Biz.pendBuy === m.id) { delete Biz.st()[m.id]; Biz.pendBuy = null; Prog.save(); } if (m.c) Wallet.grant(m.c, 'Devolución'); UI.toast(m.why, 'bad'); return; }
     if (m && m.t === 'bizlost') { Biz.lost(m.id); return; }
+    if (m && m.t === 'aucev') { Biz.aucEv(m); return; }
     if (m && m.t === 'bidno') { Wallet.grant(m.c, 'Puja rechazada'); UI.toast(m.why, 'bad'); return; }
     if (m && m.t === 'gift') { Wallet.grant(m.c, m.why || 'Regalo'); UI.toast('💰 ' + (m.why || 'Has recibido dinero') + ': +' + fmt(m.c), 'good'); FX.coins(null, 16); return; }
     if (m && m.t === 'aidno') { UI.toast(m.why, 'bad'); return; }
@@ -6678,6 +6708,7 @@ function buildSur() {
       box(-27, 91, -19.7, 102, 8); box(-17.3, 91, -10, 102, 8); box(-19.7, 91, -17.3, 101.6, 8);
       G.box(-19.75, 0, 101.9, -17.25, 3, 102.08, '#ff3d9a', { lit: false, faces: 's' }); k.sign('ENTRADA', '#ff3d9a', 2.2, [-18.5, 3.4, 102.12], 0);
     } shop('bowling', -8, 8, 102, 1, 6.6, '#2a2050'); shop('gym', 10, 27, 102, 1, 6, '#3a2a24');
+    Crime.spots(k, [0, 1, 2]);
     // lavado (oeste) con su explanada
     shop('wash', -60, -43, 86, -1, 5.4, '#24384a'); G.floor(-60, 78, -43, 86, .022, '#6a6478', true); for (let x = -58; x < -44; x += 3) G.floor(x, 79, x + .15, 85, .025, '#f2f2f2', false);
     addCarGeo(G, -55, 82, Math.PI / 2, '#c0392b', false); addCarGeo(G, -49, 82, Math.PI / 2, '#2c3e50', false); box(-56.2, 80.9, -53.8, 83.1, 1.5); box(-50.2, 80.9, -47.8, 83.1, 1.5);
@@ -6711,6 +6742,8 @@ function buildSur() {
     k.npc(-6, 51.3, 0, null, true); k.npc(6, 60.7, Math.PI, null, true);
   });
 }
+
+{ const st = document.createElement('style'); st.textContent = '#aucBar{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:30;display:none;align-items:center;gap:14px;padding:8px 16px;border-radius:14px;background:linear-gradient(135deg,#2a0a4a,#0a2a4a);border:2px solid #ff3df2;box-shadow:0 0 18px #ff3df2aa;color:#fff;font:700 14px system-ui;pointer-events:none}#aucBar.hot{border-color:#ff4d4d;box-shadow:0 0 22px #ff4d4d;animation:abp .6s infinite alternate}#aucBar .ab-t{color:#ff3df2;letter-spacing:2px;font-size:12px}#aucBar .ab-n{font-size:16px}#aucBar .ab-p{color:#7dffb0;display:flex;flex-direction:column;line-height:1.1}#aucBar small{color:#aab;font-weight:400;font-size:11px}#aucBar .ab-c{font:800 20px monospace;color:#ffe14d}@keyframes abp{to{transform:translateX(-50%) scale(1.04)}}@media(max-width:700px){#aucBar{gap:8px;font-size:12px;padding:6px 10px}}'; document.head.appendChild(st); setInterval(() => { try { Biz.bar(); } catch (e) { } }, 1000); }
 
 /* ---- 23_jobs.js ---- */
 /* =====================================================================
@@ -6835,7 +6868,7 @@ Games.lifeguard = {
     function upd() { sRes.set(String(S.res)); sCombo.set('×' + Math.max(1, S.combo), S.combo > 1); sPay.set(fmt(S.pay), S.pay > 0); sT.set(Math.ceil(Math.max(0, S.t)) + ' s'); }
     function end() {
       S.on = false; go.disabled = false; go.textContent = 'Otro turno';
-      if (S.pay > 0) { const b = Wallet.cents; Wallet.earn(S.pay, 'lifeguard'); const got = Wallet.cents - b; UI.celebrate(got, Math.max(1, S.pay / 3), cv); UI.toast('Turno terminado: ' + S.res + ' rescates · cobras ' + fmt(got), 'good'); }
+      if (S.pay > 0) { const b = Wallet.cents; Wallet.earn(Math.min(S.pay, 4500), 'lifeguard'); const got = Wallet.cents - b; UI.celebrate(got, Math.max(1, S.pay / 3), cv); UI.toast('Turno terminado: ' + S.res + ' rescates · cobras ' + fmt(got), 'good'); }
       else UI.toast('Turno terminado sin rescates', '');
       upd();
     }
@@ -7096,6 +7129,24 @@ const NEWS = [
   ['Trabajos y maestría', 'Repartidor, taxista y socorrista. Cada nivel de maestría paga un 12 % más.'],
 ];
 
+
+/* ---------------- Patch Notes ---------------- */
+const PATCHES = [
+  { v: 'v1.4', t: 'Mejoras de calidad de vida', cur: 1,
+    nuevo: ['Subastas con cuenta atrás: 15 min, +1 min por puja, aviso grande en pantalla y devolución automática si te superan', 'Aviso periódico para publicar propuestas en Suggestions', 'Policías con uniforme y patrulla funcional (sirena)', 'Patch Notes con resumen de cada versión'],
+    cambios: ['Sin cubo en el spawn; con casa propia empiezas dentro de ella', 'Chat: historial al entrar, sin mensajes duplicados ni atascados', 'Ciclo día/noche compartido: días luminosos, atardeceres y noches equilibradas', 'Sueldos: distribuidor > policía > socorrista; policía 833 €/10 min', 'Guardado del servidor más seguro (escritura atómica, copia de seguridad y volcado al apagar)', 'Ruleta: apuestas devueltas si se pierde la conexión'] },
+  { v: 'v1.3', t: 'Crimen, policía y club',
+    nuevo: ['Un policía y un distribuidor secretos por servidor', 'Complejo de seguridad: comisaría, cárcel, armería y GrowShop', 'Armas con licencia, Bizum y club nocturno', 'Verificación de edad (18+)'],
+    cambios: ['Mapa ampliado', 'Pruebas, arrestos y recompensas validados por el servidor'] },
+  { v: 'v1.2', t: 'Gran ciudad',
+    nuevo: ['Casino con planta -1, ruleta común cada 15 s y pantallas en directo', 'Elecciones, gobierno, Ayuntamiento y OVNI', 'Chat, contactos, Suggestions y noticias', 'Negocios con dueño único y subastas'],
+    cambios: ['Ranking de jugadores reales'] },
+  { v: 'v1.1', t: 'Multijugador',
+    nuevo: ['Mundo compartido con nombre y dinero sobre cada jugador', 'JetX común para todos'], cambios: ['Correr con Shift', 'Más efectos y recompensas'] },
+  { v: 'v1.0', t: 'Lanzamiento', nuevo: ['Ciudad abierta en 3D con estética neón', 'Casino, trabajos y 100 € iniciales'], cambios: [] },
+];
+const PN_VER = PATCHES[0].v;
+
 /* ---------------- Chat ---------------- */
 const Chat = {
   log: [], open: false,
@@ -7125,7 +7176,8 @@ const Chat = {
   },
   send(t) { if (Net.mode !== 'online') { this.sys('Sin conexión con el servidor.'); return; } Net.transport.send({ t: 'chat', txt: t }); },
   whisper(name) { this.toggle(true, '/w ' + name + ' '); },
-  add(m) { this.log.push(Object.assign({ at: Date.now() }, m)); this.log = this.log.slice(-60); this.draw(); if (m.priv && m.pid !== Net.id) { Sfx.play('ding'); Phone.notify && Phone.notify(); } },
+  add(m) { if (m.id && this.log.some(x => x.id === m.id)) return; this.log.push(Object.assign({ at: Date.now() }, m)); this.log = this.log.slice(-60); this.draw(); if (m.priv && m.pid !== Net.id && !m.old) { Sfx.play('ding'); Phone.notify && Phone.notify(); } if (m.priv) Contacts.refresh(); },
+  hist(list) { const ids = new Set(this.log.map(x => x.id)); const add = (list || []).filter(m => !ids.has(m.id)).map(m => Object.assign({}, m, { old: true, at: 0 })); this.log = add.concat(this.log).slice(-60); this.draw(); },
   sys(txt) { this.add({ sys: true, txt }); },
   draw() {
     const now = Date.now(), L = this.open ? this.log.slice(-14) : this.log.filter(m => now - m.at < 15000).slice(-6);
@@ -7155,21 +7207,29 @@ const Contacts = {
       $$('[data-del]', c).forEach(b => b.onclick = () => { delete this.st()[b.dataset.del]; Prog.save(); draw(c); });
       $$('[data-w]', c).forEach(b => b.onclick = () => { UI.closeModal(); Chat.whisper(b.dataset.w); });
     };
-    UI.modal('', draw); $('#modal').classList.add('right');
+    UI.modal('', c => { this.c = c; this.dr = draw; draw(c); }); $('#modal').classList.add('right');
   },
+  refresh() { if (!(this.c && this.c.isConnected && this.dr)) return; const k = this.online().map(p => p.id).sort().join(); if (k === this.k) return; this.k = k; this.dr(this.c); },
 };
+Bus.on('peer', () => Contacts.refresh()); Bus.on('peerLeave', () => Contacts.refresh());
 
 /* ---------------- News y Suggestions ---------------- */
 const Board = {
   news: [], sug: [],
   initButtons() {
-    const nb = el('button', { class: 'tb', text: 'News', onclick: () => this.newsModal() }), sb = el('button', { class: 'tb', text: 'Suggestions', onclick: () => this.sugModal() });
+    const nb = el('button', { class: 'tb', text: 'Patch Notes', onclick: () => this.newsModal() }), sb = el('button', { class: 'tb', text: 'Suggestions', onclick: () => this.sugModal() });
     $('.hud-btns').prepend(nb, sb); this.nb = nb;
+    const st = document.createElement('style'); st.textContent = '.pn{margin:10px 0;padding:10px 12px;border-radius:12px;background:#ffffff0d;border-left:3px solid #7a5cff}.pn-big{border-left-color:#ff3df2;background:linear-gradient(135deg,#3a0a5a66,#0a2a5a66);box-shadow:0 0 20px #ff3df255;font-size:15px}.pn-h{display:flex;gap:8px;align-items:center}.pn-v{background:#7a5cff;color:#fff;border-radius:8px;padding:1px 8px;font-weight:800}.pn-h em{margin-left:auto;font-style:normal;font-size:11px;background:#2bd67b;color:#04210f;border-radius:6px;padding:1px 6px;font-weight:800}.pn h4{margin:8px 0 2px;font-size:13px;color:#ffe14d}.pn ul{margin:0;padding-left:18px;color:#dde}';
+    document.head.appendChild(st);
+    if (Store.get('pn_seen', null) !== PN_VER) setTimeout(() => { try { this.newsModal(1); } catch (e) { } }, 6000);
+    setInterval(() => { if (document.hidden) return; UI.toast('💡 ¿Tienes ideas? Publica tu propuesta en «Suggestions» y vótalas con los demás', ''); }, 10 * 60e3);
   },
-  newsModal() {
-    this.nb.classList.remove('new'); Store.set('newsSeen', (this.news[0] || {}).at || 0);
-    UI.modal(`<h2>News</h2><h3 style="margin:4px 0">En la ciudad</h3>` + (this.news.length ? this.news.slice(0, 15).map(n => `<div class="hm-row"><span>${esc(n.txt)}</span><small style="color:var(--muted)">${new Date(n.at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<p class="note">' + (Net.mode === 'online' ? 'Aún no ha pasado nada hoy.' : 'Conéctate al servidor para ver lo que pasa en la ciudad.') + '</p>') +
-      `<h3 style="margin:14px 0 4px">Novedades del juego</h3>` + NEWS.map(([t, d]) => `<div class="hm-row" style="display:block"><b>${t}</b><br><small style="color:var(--muted)">${d}</small></div>`).join('') + `<div class="acts"><button class="btn" id="mOk">Cerrar</button></div>`, c => { c.querySelector('#mOk').onclick = () => UI.closeModal(); });
+  newsModal(only) {
+    this.nb.classList.remove('new'); Store.set('newsSeen', (this.news[0] || {}).at || 0); Store.set('pn_seen', PN_VER);
+    const li = a => a.map(x => `<li>${x}</li>`).join('');
+    const one = (p, big) => `<div class="pn${big ? ' pn-big' : ''}"><div class="pn-h"><span class="pn-v">${p.v}</span><b>${p.t}</b>${p.cur ? '<em>ACTUAL</em>' : ''}</div>` + (p.nuevo.length ? `<h4>✨ Novedades</h4><ul>${li(p.nuevo)}</ul>` : '') + (p.cambios.length ? `<h4>🔧 Cambios y correcciones</h4><ul>${li(p.cambios)}</ul>` : '') + '</div>';
+    const city = this.news.length ? this.news.slice(0, 10).map(n => `<div class="hm-row"><span>${esc(n.txt)}</span><small style="color:var(--muted)">${new Date(n.at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<p class="note">Sin novedades en la ciudad.</p>';
+    UI.modal(`<h2>📋 Patch Notes</h2>` + (only ? one(PATCHES[0], 1) : PATCHES.map(p => one(p)).join('') + `<h3 style="margin:14px 0 4px">En la ciudad</h3>` + city) + `<div class="acts"><button class="btn primary" id="mOk">${only ? '¡Entendido!' : 'Cerrar'}</button></div>`, c => { c.querySelector('#mOk').onclick = () => UI.closeModal(); });
     $('#modal').classList.add('right');
   },
   sugModal() {
@@ -7263,6 +7323,7 @@ setInterval(() => { if (Net.mode !== 'online' && !$('#hud').hidden && Math.rando
   const _r = Net.receive;
   Net.receive = function (m) {
     if (m && m.t === 'chat') { Chat.add(m); return; }
+    if (m && m.t === 'chathist') { Chat.hist(m.list); return; }
     if (m && m.t === 'news') { Board.news = m.list || []; if (Board.nb && (Board.news[0] || {}).at > Store.get('newsSeen', 0)) Board.nb.classList.add('new'); return; }
     if (m && m.t === 'sug') { Board.sug = m.list || []; if (Board.sugC && Board.sugC.isConnected && !Board.sugC.contains(document.activeElement)) Board.sugDraw(Board.sugC); return; }
     if (m && m.t === 'ufo') { Ufo.start(m.x, m.z, m.at || 0); return; }
@@ -7302,6 +7363,14 @@ const Rides = {
 };
 
 /* ---------------- Discoteca Pulse (interior) ---------------- */
+const Club = {
+  tip(d, name) {
+    UI.modal(`<h2>💖 ${name}</h2><p>Un detalle para la bailarina. La mitad de lo que se gasta en el club es para el dueño. Dinero ficticio.</p><div class="acts"><button class="btn" data-t="500">5 €</button><button class="btn" data-t="2000">20 €</button><button class="btn primary" data-t="5000">50 €</button><button class="btn" id="tpX">Cerrar</button></div>`, c => {
+      c.querySelector('#tpX').onclick = () => UI.closeModal();
+      c.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { const v = +b.dataset.t; if (!Wallet.spend(v, 'Propina club')) return; bizSpend('club', v); d.bt = 10; Sfx.play('coin'); FX.float(null, '💖 ' + name + ': ¡gracias!', '#ff7ac0', 32); Prog.addXp && Prog.addXp(Math.round(v / 500)); UI.closeModal(); });
+    });
+  },
+};
 function buildClub() {
   const sc = buildFloor({
     id: 'club', label: 'DISCOTECA PULSE', music: 'roof', ox: 0, oz: 0, hx: 8.1, hz: 5.1, h: 5.5, doorS: 1.2, fog: [0x0a0418, 30, 80], amb: [[.2, .12, .3], [.12, .08, .2], [.04, .02, .06]],
@@ -7321,10 +7390,11 @@ function buildClub() {
     k.screen(8, 2.6, [0, 3.3, -5.05], 0, (g, w, h, t) => { g.fillStyle = '#05020a'; g.fillRect(0, 0, w, h); for (let i = 0; i < 32; i++) { const v = Math.abs(Math.sin(t * 4 + i * .6) * Math.sin(t * 1.3 + i)) * h * .8; g.fillStyle = `hsl(${(i * 11 + t * 60) % 360},100%,60%)`; g.fillRect(i * w / 32 + 2, h - v, w / 32 - 4, v); } neonText(g, 'PULSE', w / 2, h * .25, h * .26, '#fff', '#ff3d9a'); }, .08);
     // escenarios con bailarines (ropa de calle) y público
     for (const x of [-6.2, 6.2]) { G.cyl(x, 0, -2.6, 1.1, .5, 16, '#2a1a40', { topColor: '#3ff2ff' }); sc.circles.push({ x, z: -2.6, r: 1.2 }); gl8.add(x, 2, -2.6, '#3ff2ff', .35); }
-    const dancers = [], looks = [{ shirt: '#ff3d9a', sleeve: '#ff3d9a', pants: '#1a1a2a', hair: '#2a1208', hairStyle: 1 }, { shirt: '#3ff2ff', sleeve: '#151515', pants: '#222', hair: '#e8c070', hairStyle: 3 }];
-    [[-6.2, .5], [6.2, .5]].forEach(([x, y], i) => { const h = makeHuman(randomLook(looks[i])); h.root.position.set(x, y, -2.6); sc.group.add(h.root); dancers.push({ h, x, y, z: -2.6, ph: i * 1.7, s: 1.6 }); });
+    const dancers = [], looks = [{ lingerie: '#ff3d9a', hair: '#2a1208', hairStyle: 4 }, { lingerie: '#3ff2ff', hair: '#e8c070', hairStyle: 4 }];
+    [[-6.2, .5], [6.2, .5]].forEach(([x, y], i) => { const h = makeHuman(randomLook(looks[i])); h.root.position.set(x, y, -2.6); sc.group.add(h.root); dancers.push({ h, x, y, z: -2.6, ph: i * 1.7, s: 1.6, bt: 0 });
+      sc.interact.push({ x, z: -.9, r: 1.9, label: i ? 'Bailarina Luna' : 'Bailarina Nova', sub: 'Dar propina · 5 / 20 / 50 € (solo mayores de edad, dinero ficticio)', fn: () => Club.tip(dancers[i], i ? 'Luna' : 'Nova') }); });
     for (let i = 0; i < 7; i++) { const a = i / 7 * TAU, x = Math.cos(a) * 2.6, z = Math.sin(a) * 1.5; const h = makeHuman(randomLook()); h.root.position.set(x, 0, z); sc.group.add(h.root); dancers.push({ h, x, y: 0, z, ph: i, s: .9 + (i % 3) * .2 }); }
-    k.upd.push((dt, t) => { for (const d of dancers) { const b = Math.abs(Math.sin(t * 4 + d.ph)); d.h.root.position.set(d.x + Math.sin(t * 1.3 + d.ph) * .15, d.y + b * .12 * d.s, d.z); d.h.root.rotation.y = Math.sin(t * 1.1 + d.ph) * 1.4; d.h.animate(dt, .9 * d.s, t + d.ph); } });
+    k.upd.push((dt, t) => { for (const d of dancers) { if (d.bt > 0) d.bt -= dt; const b = Math.abs(Math.sin(t * (d.bt > 0 ? 6 : 4) + d.ph)) * (d.bt > 0 ? 1.6 : 1); d.h.root.position.set(d.x + Math.sin(t * 1.3 + d.ph) * .15, d.y + b * .12 * d.s, d.z); d.h.root.rotation.y = Math.sin(t * 1.1 + d.ph) * 1.4; d.h.animate(dt, .9 * d.s, t + d.ph); } });
     // láseres
     { const pos = [], col = []; for (let i = 0; i < 10; i++) { pos.push(0, 5.2, -4.8, 0, 0, 0); col.push(1, .2, .6, 1, .2, .6); } const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); lg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
       const lz = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false })); sc.group.add(lz); const P = lg.attributes.position, Cc = lg.attributes.color;
@@ -7413,7 +7483,7 @@ function buildNorte() {
     k.sign('RECREATIVOS', '#b45cff', 6, [-41.9, 4.6, -52], Math.PI / 2); for (let z = -61.5; z < -42.5; z += .8) gl1.add(-41.9, 5.8, z, '#b45cff', .4);
     sc.interact.push({ x: -40.2, z: -52, r: 2.2, label: 'Salón recreativo', sub: 'Neon Snake · 1 € la partida · premios según puntos', fn: () => UI.open('snake') });
     // parque oeste y edificios del fondo
-    G.floor(-61.5, -110, -41, -78, .02, '#2f6a3a', true); for (const [x, z] of [[-56, -84], [-46, -86], [-52, -96], [-58, -104], [-45, -104]]) tree(x, z);
+    Sec.block(k, sc); Crime.spots(k, [3, 4, 5]);
     k.sign('NEON PARK ↑', '#ff3d9a', 3.6, [34, 3.4, -33.8], Math.PI); k.sign('RECREATIVOS · KARTS ↑', '#3df58a', 4.6, [-34, 3.4, -33.8], Math.PI);
     const R = seeded(77), pal = ['#2a2741', '#30293f', '#3a2f3a', '#283040', '#3a3450'];
     for (let z = -110; z < -36;) { const d = 7 + R() * 7, h = 10 + R() * 26; if (z + d > -35) break; G.box(39.6, 0, z, 48, h, z + d, pal[Math.floor(R() * 5)], { top: '#1d1a2a' }); for (let y = 4; y + 1.6 < h; y += 3.2) for (let a = z + .6; a + 1.2 < z + d; a += 2.4) if (R() < .5) G.rect('w', 39.6, a, a + 1.2, y, y + 1.5, '#ffd58a', false, .04); z += d + .4; }
@@ -7574,6 +7644,428 @@ Games.snake = {
   unmount() { this.S.alive = false; cancelAnimationFrame(this.S.raf); this.S.off(); },
 };
 
+/* ---- 27_crime.js ---- */
+/* =====================================================================
+   CRIMEN (solo mayores de 18, dinero ficticio): pantalla de edad, Bizum,
+   roles únicos y secretos (policía / distribuidor), pruebas, detenciones,
+   cárcel con condena y multas. El servidor decide roles, pruebas, condenas
+   y recompensas; el cliente solo muestra y pide.
+   ===================================================================== */
+const CR = { role: '', copId: '', clues: [], shots: [], deal: false, ev: 0, hist: [], d: null, until: 0, jailEnd: 0, lic: 0, mask: false, alerts: [] };
+const SPOT_XZ = [[8, 56, 'Plaza del Neón'], [-50, 45, 'Parque Central'], [14, 114, 'la playa'], [0, -45, 'Neon Park'], [32, -72, 'el Karting'], [-40, -52, 'los recreativos']];
+const crSend = o => { if (Net.mode === 'online') { Net.transport.send(o); return true; } UI.toast('Esto necesita el servidor multijugador', 'bad'); return false; };
+const ago = t => { const s = Math.max(0, Math.floor((Date.now() - t) / 1000)); return s < 60 ? s + ' s' : Math.floor(s / 60) + ' min'; };
+
+const AgeGate = {
+  init() {
+    if (Store.get('adult18', false)) return;
+    const d = document.createElement('div'); d.id = 'age'; d.tabIndex = 0; d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(5,3,12,.96);padding:16px';
+    d.innerHTML = `<div style="max-width:430px;padding:26px;border-radius:18px;background:#1a1030;border:1px solid #ff3d9a;text-align:center;color:#fff;box-shadow:0 0 50px rgba(255,61,154,.3)"><h2 style="margin:0 0 10px;font-family:var(--display);letter-spacing:1px">¿ERES MAYOR DE EDAD?</h2><p style="color:#c9c0e0;line-height:1.5;margin:0">Este juego trata temas de adultos: crimen, armas, una discoteca y apuestas con dinero ficticio. Es solo para mayores de 18 años.</p><div style="display:flex;gap:10px;justify-content:center;margin-top:16px"><button class="btn primary" id="agY">Sí, tengo 18 o más</button><button class="btn" id="agN">No</button></div><p id="agM" style="color:#ff8aa8;margin:12px 0 0" hidden>Entonces este juego no es para ti.</p></div>`;
+    document.body.appendChild(d); d.focus();
+    d.querySelector('#agY').onclick = () => { Store.set('adult18', true); d.remove(); };
+    d.querySelector('#agN').onclick = () => { d.querySelector('#agM').hidden = false; d.querySelector('#agY').hidden = true; d.querySelector('#agN').hidden = true; };
+    d.addEventListener('keydown', e => e.stopPropagation());
+  },
+};
+
+/* ---------- Bizum: transferencias entre jugadores (el servidor valida, evita duplicados y abusos) ---------- */
+const Bizum = {
+  pend: {},
+  modal() { UI.modal('', c => { this.c = c; this.draw(c); }); $('#modal').classList.add('right'); UI.onClose = () => { this.c = null; }; },
+  names() { const m = new Map(); for (const [id, p] of Net.peers) if (p.name) m.set(id, p.name); for (const r of (Top.list || [])) if (r.id && r.id !== Net.id && r.n && !m.has(r.id)) m.set(r.id, r.n); return [...m]; },
+  draw(c, step) {
+    const on = Net.mode === 'online', hist = CR.hist || [];
+    c.innerHTML = `<h2>💸 Bizum</h2><div class="hm-row"><span>Tu saldo</span><b>${fmt(Wallet.cents)}</b></div>` + (!on ? '<p class="note">Bizum solo funciona conectado al servidor.</p>' : step ? `
+      <div class="gov-ed"><b>Confirma la transferencia</b><p style="margin:6px 0">Vas a enviar <b>${fmt(step.c)}</b> a <b>${esc(step.n)}</b>.</p><div class="hm-act"><button class="btn primary" id="bzOk">Confirmar y enviar</button><button class="btn" id="bzNo">Cancelar</button></div></div>` : `
+      <h3 style="margin:12px 0 4px">Nueva transferencia</h3>
+      <input id="bzTo" class="inp" list="bzL" maxlength="16" placeholder="Nombre del jugador"><datalist id="bzL">${this.names().map(([id, n]) => `<option value="${esc(n)}">`).join('')}</datalist>
+      <input id="bzC" class="inp" type="number" min="1" max="5000" step="0.01" placeholder="Importe en € (1 a 5.000)" style="margin-top:6px">
+      <div class="hm-act" style="margin-top:8px"><button class="btn primary" id="bzGo">Continuar</button></div><p class="note" style="margin:6px 0 0" id="bzE"></p>`) + `
+      <h3 style="margin:14px 0 4px">Historial</h3>` + (hist.length ? hist.map(h => `<div class="hm-row"><span>${h.k === 'in' ? '⬇️ De' : '⬆️ A'} <b>${esc(h.n)}</b><br><small>${new Date(h.t).toLocaleString('es-ES', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small></span><b style="color:${h.k === 'in' ? '#3df58a' : '#ff7a9a'}">${h.k === 'in' ? '+' : '−'}${fmt(h.c)}</b></div>`).join('') : '<p class="note">Todavía no has hecho ni recibido transferencias.</p>');
+    const E = t => { const e = c.querySelector('#bzE'); if (e) e.textContent = t; };
+    const go = c.querySelector('#bzGo'); if (go) go.onclick = () => {
+      const n = c.querySelector('#bzTo').value.trim(), v = Math.round(parseFloat(c.querySelector('#bzC').value) * 100);
+      if (!n) return E('Escribe el nombre del destinatario'); if (!(v >= 100 && v <= 500000)) return E('El importe debe estar entre 1 € y 5.000 €'); if (v > Wallet.cents) return E('No tienes saldo suficiente');
+      if (n.toLowerCase() === String(Settings.name).toLowerCase()) return E('No puedes enviarte dinero a ti mismo');
+      const hit = this.names().find(([id, nm]) => nm.toLowerCase() === n.toLowerCase()); this.draw(c, { n: hit ? hit[1] : n, to: hit ? hit[0] : n, c: v });
+    };
+    const ok = c.querySelector('#bzOk'); if (ok) ok.onclick = () => this.send(step, c);
+    const no = c.querySelector('#bzNo'); if (no) no.onclick = () => this.draw(c);
+  },
+  send(s, c) {
+    if (s.c > Wallet.cents || !Wallet.spend(s.c, 'Bizum')) { this.draw(c); return; }
+    const nonce = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); this.pend[nonce] = s.c;
+    if (!crSend({ t: 'bz', to: s.to, c: s.c, n: nonce })) { Wallet.grant(s.c, 'Bizum devuelto'); delete this.pend[nonce]; return; }
+    c.querySelector('.gov-ed').innerHTML = '<p>Enviando…</p>';
+  },
+  result(m) {
+    const reserved = this.pend[m.n]; delete this.pend[m.n];
+    if (m.ok) { CR.hist = m.hist || CR.hist; UI.toast('💸 Bizum enviado: ' + fmt(m.c) + ' a ' + m.to, 'good'); Sfx.play('ding'); }
+    else { if (reserved) Wallet.grant(reserved, 'Bizum devuelto'); UI.toast('Bizum no enviado: ' + m.why, 'bad'); Sfx.play('error'); }
+    if (this.c && this.c.isConnected) this.draw(this.c);
+  },
+};
+
+/* ---------- Policía: alistarse, cuaderno de investigación, inspeccionar, registrar, interrogar y arrestar ---------- */
+const Cop = {
+  apply() {
+    if (CR.role === 'cop') { UI.modal(`<h2>Placa de policía</h2><p>Estás de servicio. Cobras un sueldo cada 10 minutos y una gran recompensa si detienes al distribuidor con pruebas.</p><div class="acts"><button class="btn danger" id="cpQ">Dejar el cuerpo</button><button class="btn primary" id="cpN">Abrir cuaderno</button></div>`, c => { c.querySelector('#cpQ').onclick = () => { crSend({ t: 'role', r: 'cop', on: false }); UI.closeModal(); }; c.querySelector('#cpN').onclick = () => { UI.closeModal(); this.modal(); }; }); return; }
+    UI.modal(`<h2>Alistarse como policía</h2><p>Solo puede haber <b>un policía</b> a la vez. Tu misión: encontrar al distribuidor de marihuana (su identidad es secreta) reuniendo pistas y pruebas.</p>
+      <ul style="margin:6px 0 10px 18px;line-height:1.5"><li>Interroga a testigos en la calle para obtener descripciones.</li><li>Registra casas: si hay plantas, tendrás una prueba fuerte.</li><li>Detén solo con pruebas: <b>detener a un inocente sin pruebas te cuesta la placa 15 minutos, multa y cárcel.</b></li><li>Sueldo: ${fmt(83300)} cada 10 min + recompensa de hasta ${fmt(4100000)} por detener al distribuidor.</li></ul>
+      <div class="acts"><button class="btn primary" id="cpY">Alistarme</button><button class="btn" id="cpX">Ahora no</button></div>`, c => { c.querySelector('#cpY').onclick = () => { crSend({ t: 'role', r: 'cop', on: true }); UI.closeModal(); }; c.querySelector('#cpX').onclick = () => UI.closeModal(); });
+  },
+  modal() {
+    if (CR.role !== 'cop') { UI.toast('Solo los agentes pueden abrir el cuaderno', 'bad'); return; }
+    crSend({ t: 'c', a: 'sync' }); UI.modal('', c => { this.c = c; this.draw(c); }); $('#modal').classList.add('right'); UI.onClose = () => { this.c = null; };
+  },
+  draw(c) {
+    c.innerHTML = `<h2>📓 Cuaderno de investigación</h2>
+      <div class="hm-row"><span>¿Hay un distribuidor activo?</span><b>${CR.deal ? 'Sí' : 'No (no hay nada que investigar)'}</b></div>
+      <div class="hm-row"><span>Pruebas materiales (plantación)</span><b>${CR.ev}</b></div>
+      <div class="hm-act" style="margin:8px 0"><button class="btn" id="cpI">🔍 Inspeccionar al más cercano</button><button class="btn" id="cpS">🏠 Registrar esta casa</button><button class="btn danger" id="cpA">🚔 Arrestar al más cercano</button></div>
+      <p class="note" id="cpO" style="min-height:20px">${CR.out ? esc(CR.out) : 'Pulsa J inspeccionar · K registrar casa · X arrestar. Interroga a los testigos (E) para conseguir pistas.'}</p>
+      <h3 style="margin:10px 0 4px">Pistas de testigos</h3>` + (CR.clues.length ? CR.clues.map(x => `<div class="hm-row"><span><b>${esc(x.desc)}</b><br><small>${esc(x.spot)} · hace ${ago(x.t)} · ${x.q} punto${x.q > 1 ? 's' : ''}</small></span></div>`).join('') + '<p class="note">Para detener a alguien válidamente necesitas 5 puntos de pruebas que coincidan con su aspecto actual (o una plantación). Si cambia de ropa o se enmascara, las pistas antiguas pierden valor.</p>' : '<p class="note">Aún no tienes pistas. Cuando haya un aviso vecinal, ve a la zona e interroga a la gente.</p>') +
+      (CR.shots.length ? '<h3 style="margin:10px 0 4px">Disparos recientes</h3>' + CR.shots.map(x => `<div class="hm-row"><small>hace ${ago(x.t)} · ${esc(x.zone)} · ${esc(x.desc)}</small></div>`).join('') : '');
+    c.querySelector('#cpI').onclick = () => this.act('inspect'); c.querySelector('#cpS').onclick = () => this.act('search'); c.querySelector('#cpA').onclick = () => this.act('arrest');
+  },
+  act(a) { if (CR.role !== 'cop') return; crSend({ t: 'c', a }); },
+  say(t) { CR.out = t; UI.toast(t, ''); if (this.c && this.c.isConnected) this.draw(this.c); },
+  bar() {
+    let b = $('#copbar'); if (!b) { b = document.createElement('div'); b.id = 'copbar'; b.style.cssText = 'position:fixed;left:14px;bottom:90px;z-index:42;display:flex;gap:6px'; b.innerHTML = [['📓', 'Cuaderno (N)', 'N'], ['🔍', 'Inspeccionar (J)', 'J'], ['🏠', 'Registrar casa (K)', 'K'], ['🚔', 'Arrestar (X)', 'X']].map(([i, t, k]) => `<button class="btn sm" data-k="${k}" title="${t}" style="font-size:20px;padding:8px 11px">${i}</button>`).join(''); document.body.appendChild(b); b.onclick = e => { const k = e.target.closest('[data-k]'); if (k) this.key(k.dataset.k); }; }
+    b.hidden = CR.role !== 'cop';
+  },
+  key(k) { if (CR.role !== 'cop') return; if (k === 'N') this.modal(); else this.act({ J: 'inspect', K: 'search', X: 'arrest' }[k]); },
+};
+
+/* ---------- Distribuidor (secreto): casa, cultivo, ventas a compradores de la calle ---------- */
+const Dealer = {
+  houseId() { const id = World.scene && World.scene.id; return /^h\d$/.test(id || '') && Homes.owned(id) ? id : ''; },
+  anyHouse() { return HOMES.some(h => Homes.owned(h.id)); },
+  join() {
+    if (CR.role === 'dealer') return this.modal();
+    if (!this.anyHouse()) { UI.toast('Primero necesitas una casa propia (tablón de casas)', 'bad'); return; }
+    UI.modal(`<h2>El dueño te hace un gesto…</h2><p>«Aquí hay un negocio que paga muy bien. <b>Solo puede haber un distribuidor</b> y nadie debe saber quién eres.»</p>
+      <ul style="margin:6px 0 10px 18px;line-height:1.5"><li>Compra semillas y equipo aquí, planta en tu casa y cosecha.</li><li>Vende a los compradores de la calle (te pagan 40–60 € por unidad).</li><li>La policía puede describirte por lo que viste: cámbiate de ropa o ponte la máscara.</li><li><b>Si te detienen con pruebas: 5 min de cárcel, multa de 5.000 € y pierdes tu casa de cultivo.</b></li></ul>
+      <div class="acts"><button class="btn primary" id="dlY">Aceptar el trabajo</button><button class="btn" id="dlX">No, gracias</button></div>`, c => { c.querySelector('#dlY').onclick = () => { crSend({ t: 'role', r: 'dealer', on: true, house: 1 }); UI.closeModal(); }; c.querySelector('#dlX').onclick = () => UI.closeModal(); });
+  },
+  modal() {
+    if (CR.role !== 'dealer') return; crSend({ t: 'd', a: 'sync' }); UI.modal('', c => { this.c = c; this.draw(c); }); $('#modal').classList.add('right'); UI.onClose = () => { this.c = null; };
+  },
+  draw(c) {
+    const d = CR.d || { seeds: 0, prod: 0, lamp: 1, slots: 3, plants: [], mask: false, cool: [] }, inH = this.houseId(), ready = d.plants.filter(s => s <= 0).length;
+    c.innerHTML = `<h2>📝 Notas</h2><p class="note">Nadie sabe que eres el distribuidor. Mantén el perfil bajo.</p>
+      <div class="hm-row"><span>Semillas</span><b>${d.seeds}</b></div><div class="hm-row"><span>Producto listo para vender</span><b>${d.prod} uds</b></div><div class="hm-row"><span>Lámpara (nivel ${d.lamp}) · plantas</span><b>${d.plants.length}/${d.slots}</b></div>
+      ${d.plants.length ? '<div class="hm-list">' + d.plants.map((s, i) => `<div class="hm-row"><span>🌱 Planta ${i + 1}</span><b>${s <= 0 ? '¡Lista!' : Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')}</b></div>`).join('') + '</div>' : ''}
+      <div class="hm-act" style="margin:8px 0"><button class="btn primary" id="dlP" ${inH && d.seeds && d.plants.length < d.slots ? '' : 'disabled'}>Plantar</button><button class="btn" id="dlH" ${inH && ready ? '' : 'disabled'}>Cosechar (${ready})</button></div>
+      ${inH ? '' : '<p class="note">Para plantar y cosechar tienes que estar dentro de tu casa (usa el armario de cultivo).</p>'}
+      <div class="hm-act"><button class="btn ${d.mask ? 'primary' : ''}" id="dlM" ${CR.maskOwned ? '' : 'disabled'}>🎭 Máscara: ${d.mask ? 'puesta' : 'quitada'}</button><button class="btn" id="dlW">👕 Cambiar de ropa</button></div>
+      ${CR.maskOwned ? '' : '<p class="note">Compra la máscara en el GrowShop (30 €): oculta tu nombre y hace que las pistas valgan la mitad.</p>'}
+      <h3 style="margin:12px 0 4px">Compradores</h3>` + SPOT_XZ.map((s, i) => `<div class="hm-row"><span>${esc(s[2])}</span><span>${(d.cool || [])[i] > 0 ? '<small>vuelve en ' + d.cool[i] + ' s</small>' : '<small>disponible</small>'} <button class="btn sm" data-go="${i}">Ruta</button></span></div>`).join('') +
+      `<div class="hm-act" style="margin-top:10px"><button class="btn danger" id="dlQ">Dejar el negocio</button></div>`;
+    const P = c.querySelector('#dlP'); P.onclick = () => crSend({ t: 'd', a: 'plant', n: Math.min(d.seeds, d.slots - d.plants.length), house: inH });
+    c.querySelector('#dlH').onclick = () => crSend({ t: 'd', a: 'harvest' }); c.querySelector('#dlM').onclick = () => { crSend({ t: 'd', a: 'mask', on: !d.mask }); Crime.setMask(!d.mask); };
+    c.querySelector('#dlW').onclick = () => { UI.closeModal(); Style.wardrobe(); }; c.querySelector('#dlQ').onclick = () => { if (confirm('¿Dejar el negocio? Perderás el inventario.')) { crSend({ t: 'role', r: 'dealer', on: false }); Crime.setMask(false); UI.closeModal(); } };
+    c.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { const s = SPOT_XZ[+b.dataset.go]; World.setWaypoint({ x: s[0], z: s[1], label: s[2] }); UI.closeModal(); });
+  },
+  /** Armario de cultivo dentro de tu casa */
+  closet() { if (CR.role === 'dealer') this.modal(); else UI.toast('Solo ropa y trastos…', ''); },
+  /** Compradores en la calle */
+  sell(i) { if (CR.role !== 'dealer') return; if (!CR.d || CR.d.prod <= 0) { UI.toast('No llevas producto encima', 'bad'); return; } crSend({ t: 'd', a: 'sell', s: i }); },
+};
+
+const UNI = { shirt: '#e8eef8', jacket: '#1e3a8a', sleeve: '#1e3a8a', pants: '#0a1230', cap: '#14224a', stripe: '#4aa0ff', hat: null, hatType: null };
+{ const _sl = Style.look; Style.look = function (eq) { const l = _sl.call(this, eq); return CR.role === 'cop' ? Object.assign({}, l, UNI) : l; }; }
+const Crime = {
+  /** Uniforme y coche patrulla mientras eres policía */
+  patrol(on) {
+    const s = Vehicles.st(); if (on) { if (World.driving) return; if (s.active !== 'patrulla') this.prev = { id: s.active, pos: s.pos }; s.own.patrulla = { col: '#f4f4f4', t: {} }; s.active = 'patrulla'; Vehicles.spawn('patrulla', { x: -44.5, z: -94.5, h: Math.PI }); UI.toast('🚓 Tu coche patrulla te espera en la plaza de la Comisaría', 'good'); }
+    else { if (World.driving) World.setDriving(false); const was = s.active === 'patrulla'; delete s.own.patrulla; if (was) { const p = this.prev || {}; s.active = p.id && s.own[p.id] ? p.id : null; if (s.active) Vehicles.spawn(s.active, p.pos); else { Vehicles.mesh && World.three.scene.remove(Vehicles.mesh); Vehicles.mesh = null; Vehicles.car = null; s.pos = null; } } }
+    Prog.save();
+  },
+  init() {
+    CR.maskOwned = Store.get('mask', false); AgeGate.init(); Cop.bar();
+    addEventListener('keydown', e => { if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return; const k = e.key.toUpperCase(); if (CR.role === 'cop' && 'JKXN'.includes(k) && k.length === 1 && !UI.panelGame && !e.ctrlKey && !e.metaKey) Cop.key(k); });
+    setInterval(() => this.tick(), 1000);
+  },
+  setMask(on) { CR.mask = on; Net.setLook(Net.lastLook || {}); },
+  tick() {
+    const j = $('#jailbar'); const left = Math.ceil((CR.jailEnd - performance.now()) / 1000);
+    if (CR.jailEnd && left > 0) {
+      if (!j) { const d = document.createElement('div'); d.id = 'jailbar'; d.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:70;background:rgba(40,0,10,.92);border:1px solid #ff4a4a;border-radius:12px;padding:8px 16px;color:#fff;font-weight:700;text-align:center'; document.body.appendChild(d); }
+      $('#jailbar').innerHTML = '🔒 PRESO · ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') + '<br><small style="font-weight:400">' + esc(CR.jailWhy || '') + '</small>';
+      if (World.scene && World.scene.id !== 'carcel' && !$('#hud').hidden) World.enter('carcel', { x: -3.2 + 3.2 * Math.floor(Math.random() * 3), z: -3, yaw: 0 });
+    } else if (j) { j.remove(); if (CR.jailEnd) CR.jailEnd = 0; }
+    Cop.bar();
+  },
+  jailed() { return CR.jailEnd > performance.now(); },
+  receive(m) {
+    switch (m.t) {
+      case 'role': { const was = CR.role; CR.role = m.r || ''; CR.until = m.until || 0; if (was !== CR.role) { if (CR.role === 'cop') UI.toast('👮 Ya eres policía. Abre el cuaderno con N', 'good'); else if (CR.role === 'dealer') UI.toast('🌿 Rol secreto activado. Abre «Notas» en el móvil', 'good'); else if (was) UI.toast('Has dejado tu puesto', ''); if (was === 'dealer') this.setMask(false); try { Style.apply(Style.st().eq); } catch (e) { } }
+        { const o = Vehicles.st().own; if (CR.role === 'cop' && was !== 'cop') this.patrol(true); else if (CR.role !== 'cop' && (was === 'cop' || o.patrulla)) this.patrol(false); } Cop.bar(); return true; }
+      case 'copid': CR.copId = m.id || ''; return true;
+      case 'copinfo': CR.deal = !!m.deal; CR.ev = m.ev || 0; CR.clues = m.clues || []; CR.shots = m.shots || []; if (Cop.c && Cop.c.isConnected) Cop.draw(Cop.c); return true;
+      case 'dstate': CR.d = m; if (Dealer.c && Dealer.c.isConnected) Dealer.draw(Dealer.c); return true;
+      case 'sold': { const o = (Crime.npcs || []).find(n => n.i === m.s); if (o) o.smoke = 6; FX.float(null, '🌿 Vendido ×' + m.q, '#3df58a', 30); Sfx.play('coin'); return true; }
+      case 'cev': Cop.say(m.txt); return true;
+      case 'insp': Cop.say('🔍 ' + m.n + ' · ' + m.desc + (m.w ? ' · LLEVA UN ARMA' + (m.lic ? ' (con licencia)' : ' (SIN licencia)') : '')); return true;
+      case 'alert': UI.toast(m.txt, 'bad'); Sfx.play('error'); if (Cop.c && Cop.c.isConnected) crSend({ t: 'c', a: 'sync' }); return true;
+      case 'jail': CR.jailEnd = performance.now() + m.ms; CR.jailWhy = m.why; UI.closeModal && UI.closeModal(); UI.toast('🔒 ' + m.why + ': ' + Math.ceil(m.ms / 60000) + ' min de cárcel', 'bad'); Sfx.play('error'); this.tick(); return true;
+      case 'free': CR.jailEnd = 0; { const j = $('#jailbar'); j && j.remove(); } UI.toast('🔓 Has cumplido tu condena. ¡Estás libre!', 'good'); Sfx.play('win'); World.enter('norte', { x: -46, z: -94, yaw: 0 }); return true;
+      case 'fine': { const c = Math.min(m.c, Wallet.cents); if (c > 0 && Wallet.spend(c, 'multa')) UI.toast('💸 Multa: ' + fmt(c), 'bad'); return true; }
+      case 'bust': { const ids = m.house && Homes.owned(m.house) ? [m.house] : HOMES.filter(h => Homes.owned(h.id)).map(h => h.id).slice(0, 1); for (const id of ids) { delete Homes.st()[id]; Homes.changed(HOMES.find(h => h.id === id)); } UI.toast('🏠 Pierdes tu casa de cultivo', 'bad'); this.setMask(false); return true; }
+      case 'shotfx': case 'scare': Scare.x = m.x; Scare.z = m.z; Scare.t = 3; Scare.r = m.t === 'scare' ? 22 : 25; return true;
+      case 'seize': if (typeof Arms !== 'undefined') Arms.clear(); return true;
+      case 'lic': CR.lic = m.until; return true;
+      case 'bzr': Bizum.result(m); return true;
+      case 'bzh': CR.hist = m.hist || []; if (Bizum.c && Bizum.c.isConnected) Bizum.draw(Bizum.c); return true;
+    }
+    return false;
+  },
+  /** Compradores de la calle (se llama al construir Sur y Norte) */
+  spots(k, ids) {
+    const looks = [{ shirt: '#c0392b', pants: '#222', hairStyle: 1 }, { shirt: '#2e86c1', pants: '#34495e', hairStyle: 0 }, { shirt: '#f4d03f', pants: '#1a1a2a', hairStyle: 2 }, { shirt: '#17a589', pants: '#2c3e50', hairStyle: 1 }, { shirt: '#8e44ad', pants: '#222', hairStyle: 3 }, { shirt: '#e67e22', pants: '#1c2833', hairStyle: 0 }];
+    for (const i of ids) {
+      const [x, z, name] = SPOT_XZ[i], h = makeHuman(randomLook(looks[i])), o = { i, h, x, z, x0: x, z0: z, ry: i % 2 ? 0 : Math.PI, away: false, smoke: 0 }, puff = new THREE.Mesh(new THREE.SphereGeometry(.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xcfd8dc, transparent: true, opacity: .6, depthWrite: false })); puff.visible = false; k.sc.group.add(puff); k.sc.group.add(h.root); k.sc.circles.push({ x, z, r: .35 }); (this.npcs = this.npcs || []).push(o);
+      k.upd.push((dt, tt) => {
+        const dx = o.x - Scare.x, dz = o.z - Scare.z, d = Math.hypot(dx, dz); let sp = 0;
+        if (Scare.t > 0 && d < Scare.r) { o.x += dx / (d || 1) * 3.4 * dt; o.z += dz / (d || 1) * 3.4 * dt; o.ry = Math.atan2(dx, dz); o.away = true; sp = 1.6; }
+        else if (o.away) { const bx = o.x0 - o.x, bz = o.z0 - o.z, bd = Math.hypot(bx, bz); if (bd < .15) { o.away = false; o.x = o.x0; o.z = o.z0; } else { o.x += bx / bd * 1.5 * dt; o.z += bz / bd * 1.5 * dt; o.ry = Math.atan2(bx, bz); sp = .8; } }
+        h.root.position.set(o.x, 0, o.z); h.root.rotation.y = o.ry; h.animate(dt, sp, tt); h.light(o.x, o.z, k.sc.lights);
+        if (o.smoke > 0) { o.smoke -= dt; h.armR.rotation.x = -2.1; const f = (tt * .8) % 1; puff.visible = true; puff.position.set(o.x + Math.sin(tt * 2) * .1, 1.7 + f * .9, o.z); puff.scale.setScalar(.7 + f * 1.3); puff.material.opacity = .6 * (1 - f); } else if (puff.visible) puff.visible = false;
+      });
+      k.sc.interact.push({ x, z, r: 2, get label() { return CR.role === 'dealer' ? 'Comprador' : CR.role === 'cop' ? 'Testigo' : 'Transeúnte'; },
+        get sub() { return CR.role === 'dealer' ? 'Vender hierba (40–60 €/ud)' : CR.role === 'cop' ? 'Interrogar: ¿ha visto algo raro?' : 'Charlar un rato'; },
+        fn: () => { if (CR.role === 'dealer') Dealer.sell(i); else if (CR.role === 'cop') crSend({ t: 'c', a: 'ask', s: i }); else UI.toast(['«Qué ciudad más bonita de noche…»', '«Dicen que en el casino hay una máquina que paga mucho.»', '«Cuidado con los policías, ahora hay uno de servicio.»', '«Yo solo salgo a pasear.»'][Math.floor(Math.random() * 4)], ''); } });
+    }
+  },
+};
+{
+  const _r = Net.receive; Net.receive = function (m) { if (m && m.t && Crime.receive(m)) return; return _r.call(this, m); };
+  const _l = Net.setLook; Net.setLook = function (look) { Net.lastLook = look; _l.call(this, CR.mask ? Object.assign({}, look, { mk: 1 }) : look); };
+}
+
+/* ---- 28_security.js ---- */
+/* =====================================================================
+   COMPLEJO DE SEGURIDAD (Distrito Norte, antiguo parque oeste): Comisaría,
+   Cárcel con celdas, Armería y GrowShop. Cada edificio tiene su interior
+   real (se entra andando por la puerta). Todo es ficticio y para adultos.
+   ===================================================================== */
+const SEC = [
+  { id: 'poli', n: 'Comisaría', cx: -56.3, cz: -104.8, door: 'S', col: '#2c3e6a', neon: '#4aa0ff', carpet: ['#1c2230', 'rgba(74,160,255,.25)'], wall: { base: '#222c44', top: '#101624', dado: '#161e30', gold: '#4aa0ff', neon: '#4aa0ff' } },
+  { id: 'carcel', n: 'Cárcel', cx: -45.8, cz: -104.8, door: 'S', col: '#4a4a52', neon: '#ff4a4a', carpet: ['#26262c', 'rgba(255,74,74,.2)'], wall: { base: '#3a3a42', top: '#1c1c22', dado: '#2a2a30', gold: '#8a8a94', neon: '#ff4a4a' } },
+  { id: 'armeria', n: 'Armería', cx: -56.3, cz: -83.8, door: 'N', col: '#3a3226', neon: '#ffb347', carpet: ['#241c14', 'rgba(255,179,71,.2)'], wall: { base: '#322a20', top: '#161008', dado: '#241c14', gold: '#ffb347', neon: '#ffb347' } },
+  { id: 'growshop', n: 'GrowShop Verde', cx: -45.8, cz: -83.8, door: 'N', col: '#1f4a2a', neon: '#3df58a', carpet: ['#14281a', 'rgba(61,245,138,.2)'], wall: { base: '#1c3a24', top: '#0a1c10', dado: '#122a1a', gold: '#3df58a', neon: '#3df58a' } },
+];
+const WEAPONS = [
+  { id: 'pistol', n: 'Pistola', p: 90000, ammo: 30, pack: 30, pp: 6000, d: 'Compacta y rápida. Cargador de 30.' },
+  { id: 'ak', n: 'Rifle AK', p: 350000, ammo: 60, pack: 60, pp: 18000, d: 'Fuego automático. 60 balas.' },
+  { id: 'rpg', n: 'Lanzacohetes RPG', p: 1200000, ammo: 3, pack: 2, pp: 90000, d: 'Explosión enorme. 3 cohetes.' },
+];
+const LIC_PRICE = 60000;
+
+const Sec = {
+  steps() { return SEC.map(b => { World.defPlace(b.id, { off: [b.cx, 0, b.cz], zone: [b.cx - 5.2, b.cx + 5.2, b.cz - 5.2, b.cz + 5.2] }); return [b.id, () => this.interior(b)]; }); },
+
+  /** Fachadas y plaza (se llama al construir el Distrito Norte; sustituye al parque vacío) */
+  block(k, sc) {
+    const { G } = k, C = sc.colliders;
+    G.floor(-61.5, -110, -41, -78, .02, '#4c4658', true);
+    G.floor(-61.5, -100.4, -41, -87.6, .024, '#6a6478', true);
+    for (let x = -60; x < -42; x += 2.4) G.floor(x, -94.2, x + 1.2, -93.8, .027, '#8a8498', false);
+    // plaza con fuente y bancos
+    G.cyl(-51.2, 0, -94, 1.5, .5, 18, '#5a5468', { topColor: '#3ff2ff' }); G.cyl(-51.2, .5, -94, .25, 1.2, 8, '#8a8498'); k.gl8.add(-51.2, 1.4, -94, '#3ff2ff', .35); sc.circles.push({ x: -51.2, z: -94, r: 1.6 });
+    for (const x of [-58, -44]) { G.box(x - 1, 0, -91.1, x + 1, .45, -90.7, '#3a2a20'); G.box(x - 1, .45, -90.9, x + 1, .9, -90.8, '#3a2a20'); }
+    // coche patrulla decorativo
+    G.box(-59.6, .25, -97.6, -57.4, .85, -95.2, '#f4f4f4'); G.box(-59.2, .85, -97.3, -57.8, 1.25, -95.5, '#2a3a5a', { lit: false }); G.box(-59.4, 1.25, -96.8, -57.6, 1.4, -96, '#ff3030', { lit: false }); G.box(-58.6, 1.25, -96.8, -57.6, 1.4, -96, '#3060ff', { lit: false });
+    C.push({ x0: -59.8, x1: -57.2, z0: -97.8, z1: -95, h: 1.4 }); k.gl3.add(-58.6, 1.5, -96.4, '#4aa0ff', .7);
+    k.sign('COMPLEJO DE SEGURIDAD', '#4aa0ff', 6, [-51, 4.6, -90.2], 0);
+    G.box(-51.1, 0, -90.4, -50.9, 4, -90.1, '#2a2a33');
+    for (const b of SEC) this.facade(k, sc, b);
+    // muro trasero
+    G.box(-61.9, 0, -110.5, -40.6, 2.4, -110.1, '#3a3442'); C.push({ x0: -62, x1: -40.5, z0: -110.6, z1: -110, h: 2.4 });
+    // luces
+    for (const [x, z] of [[-61, -94], [-42, -94]]) { G.cyl(x, 0, z, .1, 4.5, 6, '#2a2a33'); k.gl8.add(x, 4.5, z, '#ffd9a0', .4); }
+  },
+  facade(k, sc, b) {
+    const { G } = k, { cx, cz, col, neon } = b, x0 = cx - 5.2, x1 = cx + 5.2, z0 = cz - 5.2, z1 = cz + 5.2, H = 5.4, S = b.door === 'S', fz = S ? z1 : z0, dz = S ? 1 : -1, face = S ? 's' : 'n';
+    G.box(x0, 0, z0, cx - .9, H, z1, col, { top: '#1c1c22' }); G.box(cx + .9, 0, z0, x1, H, z1, col, { top: '#1c1c22' });
+    if (S) { G.box(cx - .9, 0, z0, cx + .9, H, z1 - .4, col); G.box(cx - .9, 3.2, z1 - .4, cx + .9, H, z1, col); } else { G.box(cx - .9, 0, z0 + .4, cx + .9, H, z1, col); G.box(cx - .9, 3.2, z0, cx + .9, H, z0 + .4, col); }
+    G.box(x0 - .3, H, z0 - .3, x1 + .3, H + .3, z1 + .3, '#1c1c22');
+    for (const dx of [-1.05, .9]) G.box(cx + dx, 0, fz - .1, cx + dx + .15, 3.3, fz + .1, '#d8d8e0');
+    const win = (a0, a1, y0) => { for (let a = a0; a + 1.3 <= a1; a += 2.3) G.rect(face, fz, a, a + 1.3, y0, y0 + 1.4, b.id === 'carcel' ? '#444' : '#ffe8b0', false, .03); };
+    win(x0 + .8, cx - 1.6, 1.4); win(cx + 1.6, x1 - .6, 1.4);
+    if (b.id === 'carcel') for (let a = x0 + .8; a < cx - 1.6; a += .35) G.box(a, 1.4, fz + dz * .04 - .02, a + .06, 2.8, fz + dz * .04 + .02, '#111');
+    for (let x = x0; x <= x1; x += .8) k.gl1.add(x, H + .2, fz + dz * .3, neon, .4);
+    k.sign(b.n.toUpperCase(), neon, 6.6, [cx, 4.5, fz + dz * .08], S ? 0 : Math.PI, null, .4); k.gl3.add(cx, 3.5, fz + dz * .3, neon, .6);
+    sc.colliders.push({ x0, x1: cx - .9, z0, z1, h: H }, { x0: cx + .9, x1, z0, z1, h: H }, S ? { x0: cx - .9, x1: cx + .9, z0, z1: z1 - .4, h: H } : { x0: cx - .9, x1: cx + .9, z0: z0 + .4, z1, h: H });
+  },
+
+  interior(b) {
+    const S = b.door === 'S';
+    return buildFloor({
+      id: b.id, label: b.n.toUpperCase(), music: 'premier', ox: 0, oz: 0, hx: 4.8, hz: 4.8, h: 4.7, fog: [0x101018, 30, 80], amb: [[.55, .55, .6], [.3, .3, .36], [.1, .1, .14]],
+      doorS: S ? .9 : 0, doorN: S ? 0 : .9, carpet: { base: b.carpet[0], line: b.carpet[1], dot: 'rgba(255,255,255,.05)' }, wall: b.wall,
+      lights: lt => { lt(0, 3.6, 0, '#f0f4ff', 9, 1.2); lt(-2.8, 3, -2.6, b.neon, 6, .9); lt(2.8, 3, 2.6, b.neon, 6, .9); },
+    }, k => {
+      const { sc, G } = k; sc.cam = { pitch: .82, dist: 9.5, min: 5, max: 13 };
+      if (S) { sc.colliders.push({ x0: -5.4, x1: -.9, z0: 4.6, z1: 7 }, { x0: .9, x1: 5.4, z0: 4.6, z1: 7 }); sc.bounds.z1 = 6.8; } else { sc.colliders.push({ x0: -5.4, x1: -.9, z0: -7, z1: -4.6 }, { x0: .9, x1: 5.4, z0: -7, z1: -4.6 }); sc.bounds.z0 = -6.8; }
+      const T = (x, z) => S ? [x, z] : [-x, -z];
+      const m = {
+        T,
+        box(x0, z0, x1, z1, h, col, o, solid = true, y0 = 0) { const [a, bb] = T(x0, z0), [c, d] = T(x1, z1), X0 = Math.min(a, c), X1 = Math.max(a, c), Z0 = Math.min(bb, d), Z1 = Math.max(bb, d); G.box(X0, y0, Z0, X1, h, Z1, col, o || {}); if (solid) sc.colliders.push({ x0: X0, x1: X1, z0: Z0, z1: Z1, h }); },
+        npc(x, z, ry, look) { const [X, Z] = T(x, z); return k.npc(X, Z, S ? ry : ry + Math.PI, look); },
+        inter(x, z, o) { const [X, Z] = T(x, z); sc.interact.push(Object.assign({ x: X, z: Z, r: 1.6 }, o)); },
+        screen(w, h, x, y, z, ry, draw, ev) { const [X, Z] = T(x, z); return k.screen(w, h, [X, y, Z], S ? ry : ry + Math.PI, draw, ev); },
+        glow(x, y, z, c, s) { const [X, Z] = T(x, z); k.gl3.add(X, y, Z, c, s); },
+      };
+      ({ poli: Sec.poli, carcel: Sec.carcel, armeria: Sec.armeria, growshop: Sec.growshop })[b.id].call(Sec, k, m, b);
+    });
+  },
+
+  poli(k, m, b) {
+    const { G } = k, st = k.staff({ shirt: '#1e3a8a', sleeve: '#1e3a8a', pants: '#0a1230', stripe: '#4aa0ff' });
+    m.box(-3.2, -.5, 3.2, .6, 1.1, '#2c3e6a', { top: '#4aa0ff' }); m.npc(0, -1.3, 0, st); m.npc(-3.8, -3.2, 0, Object.assign({}, st, { skin: '#8d5a3b' }));
+    m.screen(3.4, 1.7, -3, 2.7, -4.72, 0, (g, w, h, t) => { g.fillStyle = '#0a1226'; g.fillRect(0, 0, w, h); g.strokeStyle = '#4aa0ff'; g.lineWidth = 4; g.strokeRect(4, 4, w - 8, h - 8); g.fillStyle = '#fff'; g.font = 'bold 34px sans-serif'; g.textAlign = 'center'; g.fillText('TABLÓN DE PRUEBAS', w / 2, 52); g.font = '24px sans-serif'; g.fillStyle = '#8ab4ff'; g.fillText(CR.role === 'cop' ? CR.clues.length + ' pistas · ' + CR.ev + ' pruebas' : 'Solo agentes', w / 2, 100); g.fillStyle = Math.floor(t * 2) % 2 ? '#ff3030' : '#3060ff'; g.fillRect(w / 2 - 60, h - 36, 120, 12); }, .5);
+    m.screen(3, 1.7, 3, 2.7, -4.72, 0, (g, w, h, t) => { g.fillStyle = '#2a1a0a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffcf5a'; g.lineWidth = 4; g.strokeRect(4, 4, w - 8, h - 8); g.fillStyle = '#ffcf5a'; g.font = 'bold 44px sans-serif'; g.textAlign = 'center'; g.fillText('SE BUSCA', w / 2, 56); g.fillStyle = '#fff'; g.font = '22px sans-serif'; g.fillText('Distribuidor de marihuana', w / 2, 92); g.fillText('Identidad: DESCONOCIDA', w / 2, 120); g.fillStyle = '#3df58a'; g.fillText('Recompensa: hasta ' + fmt(4100000), w / 2, 152); }, 2);
+    for (const x of [-4.3, 4.3]) { G.cyl(x, 0, 3.8, .22, .55, 8, '#ff7a1a', { r2: .08 }); } for (const x of [-4.4, 4.4]) G.cyl(x, 0, -4.4, .05, 3.3, 6, '#d8d8e0');
+    m.inter(0, 1.5, { r: 1.8, label: 'Mostrador de la comisaría', get sub() { return CR.role === 'cop' ? 'Estás de servicio · placa y cuaderno' : 'Alistarse como policía (solo 1 a la vez)'; }, fn: () => Cop.apply() });
+    m.inter(-3.2, -3.4, { label: 'Tablón de pruebas', get sub() { return CR.role === 'cop' ? 'Abrir el cuaderno de investigación' : 'Solo para agentes de servicio'; }, fn: () => Cop.modal() });
+    m.inter(3.4, 1.9, { label: 'Licencia de armas', get sub() { return CR.lic > Date.now() ? 'Tu licencia caduca en ' + Math.ceil((CR.lic - Date.now()) / 60000) + ' min · renovar ' + fmt(LIC_PRICE) : fmt(LIC_PRICE) + ' · válida 2 horas'; }, fn: () => Sec.buyLic() });
+  },
+
+  carcel(k, m) {
+    const { G, sc } = k, bars = new THREE.Group(), mat = new THREE.MeshBasicMaterial({ color: 0x8a8a94 });
+    for (let i = 0; i < 3; i++) {
+      const cx = -3.2 + 3.2 * i;
+      m.box(cx - 1.55, -4.8, cx - 1.4, -1.2, 3, '#55555e', {}, true); m.box(cx + 1.4, -4.8, cx + 1.55, -1.2, 3, '#55555e', {}, true);
+      sc.colliders.push({ x0: cx - 1.4, x1: cx + 1.4, z0: -1.35, z1: -1.15, h: 3 });
+      for (let x = cx - 1.35; x <= cx + 1.36; x += .28) { const bm = new THREE.Mesh(new THREE.BoxGeometry(.05, 2.8, .05), mat); bm.position.set(x, 1.4, -1.25); bars.add(bm); }
+      const top = new THREE.Mesh(new THREE.BoxGeometry(2.8, .08, .08), mat); top.position.set(cx, 2.8, -1.25); bars.add(top);
+      m.box(cx - 1.2, -4.6, cx - .1, -3.3, .5, '#4a3a2a', { top: '#6a6a7a' }, false); G.cyl(cx + .9, 0, -4.2, .22, .35, 8, '#d8d8e0');
+    }
+    sc.group.add(bars);
+    // cámaras de vigilancia que giran
+    const cams = [];
+    for (const [x, z] of [[-4.5, 4.4], [4.5, 4.4], [0, -.6]]) { const c = new THREE.Group(), body = new THREE.Mesh(new THREE.BoxGeometry(.3, .22, .5), new THREE.MeshBasicMaterial({ color: 0x22232a })), led = new THREE.Mesh(new THREE.BoxGeometry(.06, .06, .06), new THREE.MeshBasicMaterial({ color: 0xff2020 })); led.position.set(0, .1, .27); c.add(body, led); c.position.set(x, 4.1, z); sc.group.add(c); cams.push(c); }
+    k.upd.push((dt, t) => { cams.forEach((c, i) => { c.rotation.y = Math.sin(t * .6 + i * 2) * .9 + (i < 2 ? (i ? 2.4 : -2.4) : 3.14); c.children[1].visible = Math.floor(t * 2 + i) % 2 === 0; }); });
+    m.box(-1.3, 1.6, 1.3, 2.6, 1.0, '#44444c', { top: '#8a8a94' }); m.npc(0, 1.0, 0, k.staff({ shirt: '#33384a', sleeve: '#33384a', pants: '#14161e', stripe: '#ff4a4a' }));
+    m.screen(4.6, 1.15, 0, 3.5, -4.72, 0, (g, w, h) => { g.fillStyle = '#100608'; g.fillRect(0, 0, w, h); g.fillStyle = '#ff4a4a'; g.font = 'bold 40px monospace'; g.textAlign = 'center'; const left = Math.ceil((CR.jailEnd - performance.now()) / 1000); g.fillText(left > 0 ? 'TU CONDENA  ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') : 'CELDAS DISPONIBLES', w / 2, h / 2 + 14); }, .5);
+    m.inter(0, 3.1, { label: 'Carcelero', get sub() { return Crime.jailed() ? 'Te quedan ' + Math.ceil((CR.jailEnd - performance.now()) / 1000) + ' s de condena' : 'Los presos salen solos al cumplir la condena'; }, fn: () => { if (Crime.jailed()) UI.toast('🔒 Te quedan ' + Math.ceil((CR.jailEnd - performance.now()) / 1000) + ' s. Paciencia.', ''); else UI.toast('El carcelero: «Aquí se paga lo que se debe. Portaos bien.»', ''); } });
+  },
+
+  armeria(k, m) {
+    const { G } = k, st = k.staff({ shirt: '#3a3226', sleeve: '#3a3226', pants: '#111', stripe: '#ffb347', skin: '#c68863' });
+    m.box(-3.6, -.5, 3.6, .6, 1.1, '#3a3226', { top: '#ffb347' }); m.npc(0, -1.3, 0, st);
+    const gun = (x, y, len, col) => { m.box(x, -4.7, x + len, -4.55, y + .12, col, {}, false, y); };
+    for (let r = 0; r < 3; r++) for (let i = 0; i < 4; i++) { gun(-4 + i * 2, 1.3 + r * .75, 1.5, '#222'); gun(-3.6 + i * 2, 1.45 + r * .75, .5, '#555'); }
+    for (const x of [-3.9, 3.4]) m.box(x, 2.2, x + .5, 3.6, 1.0, '#222833', { top: '#ffb347' });
+    m.glow(0, 3.4, -3.4, '#ffb347', .6);
+    m.inter(0, 1.5, { r: 1.8, label: 'Armería', get sub() { return CR.lic > Date.now() ? 'Pistolas, rifles AK y RPG · tienes licencia' : 'Pistolas, rifles AK y RPG · sin licencia la policía puede detenerte'; }, fn: () => Sec.armShop() });
+  },
+
+  growshop(k, m) {
+    const { G } = k, st = k.staff({ shirt: '#1f4a2a', sleeve: '#1f4a2a', pants: '#14281a', stripe: '#3df58a', skin: '#8d5a3b', hairStyle: 1 });
+    m.box(-3.2, -.5, 1.8, .6, 1.1, '#1f4a2a', { top: '#3df58a' }); m.npc(-.6, -1.3, 0, st);
+    for (const sx of [-4.3, 4.3]) for (let r = 0; r < 3; r++) m.box(sx - .25, -4.2 + r * 2, sx + .25, -3 + r * 2, 1.7, '#2a2a2e', { top: '#3a3a40' }, true);
+    // tienda de cultivo (decoración): sala con lámparas moradas y plantas
+    m.box(1.8, -4.6, 4.2, -2.2, 2.6, '#14141a', { top: '#222' }, true); m.glow(3, 2.2, -3.4, '#b45cff', 1);
+    for (const [x, z] of [[2.5, -3.9], [3.5, -3.9], [2.5, -2.8], [3.5, -2.8]]) { const [X, Z] = m.T(x, z); G.cyl(X, 0, Z, .3, .5, 7, '#6a4a2a'); G.cyl(X, .5, Z, .35, 1.1, 7, '#2a8a3a', { r2: .1 }); }
+    for (const x of [-2.4, -1.2, 0, 1.2]) m.box(x, -4.55, x + .6, -4.2, 2.2, '#3df58a', { lit: false }, false, 2);
+    m.inter(-.6, 1.5, { r: 1.8, label: 'GrowShop · Mostrador', sub: 'Semillas, lámparas LED, ventilación y máscaras', fn: () => Sec.growShop() });
+    m.inter(-3.5, 2.6, { label: 'Dueño de la tienda', sub: 'Hablar con el dueño (trabajo bien pagado)', fn: () => Dealer.join() });
+  },
+
+  /* ---------- tiendas ---------- */
+  buyLic() { if (!Wallet.spend(LIC_PRICE, 'Licencia de armas')) return; if (!crSend({ t: 'lic', a: 'buy' })) { Wallet.grant(LIC_PRICE, 'Licencia devuelta'); return; } UI.toast('📜 Licencia de armas válida durante 2 horas', 'good'); Sfx.play('ding'); },
+  growShop() {
+    if (CR.role === 'dealer') crSend({ t: 'd', a: 'sync' });
+    UI.modal('', c => {
+      const draw = () => {
+        const dl = CR.role === 'dealer', d = CR.d || { lamp: 1 }, can = (n) => Wallet.cents >= n;
+        const rows = [['seed1', '🌱 Semilla ×1', 4000, dl], ['seed5', '🌱 Semillas ×5', 19000, dl], ['lamp', '💡 Lámpara LED nivel ' + (d.lamp + 1) + (d.lamp >= 3 ? ' (máx.)' : ''), d.lamp === 1 ? 15000 : 45000, dl && d.lamp < 3], ['mask', '🎭 Máscara' + (CR.maskOwned ? ' (ya la tienes)' : ''), 3000, !CR.maskOwned]];
+        c.innerHTML = `<h2>🌿 GrowShop Verde</h2><p class="note">Cultivo y equipo. ${dl ? 'Tienes que estar dentro de tu casa para plantar.' : 'Las semillas y lámparas solo las vende el dueño a sus colaboradores (habla con él).'}</p>` + rows.map(([id, n, p, ok]) => `<div class="hm-row"><span>${n}</span><button class="btn sm primary" data-b="${id}" ${ok && can(p) ? '' : 'disabled'}>${fmt(p)}</button></div>`).join('') + '<div class="acts"><button class="btn" id="gsX">Cerrar</button></div>';
+        c.querySelector('#gsX').onclick = () => UI.closeModal();
+        c.querySelectorAll('[data-b]').forEach(b => b.onclick = () => {
+          const r = rows.find(x => x[0] === b.dataset.b); if (!Wallet.spend(r[2], 'GrowShop')) return;
+          if (r[0] === 'mask') { CR.maskOwned = true; Store.set('mask', true); } else if (r[0] === 'lamp') crSend({ t: 'd', a: 'lamp' }); else crSend({ t: 'd', a: 'seed', n: r[0] === 'seed1' ? 1 : 5 });
+          Sfx.play('coin'); setTimeout(draw, 300);
+        });
+      }; draw(); this.gc = draw;
+    });
+  },
+  armShop() {
+    UI.modal('', c => {
+      const draw = () => {
+        const lic = CR.lic > Date.now();
+        c.innerHTML = `<h2>🔫 Armería</h2><p class="note">${lic ? 'Licencia en regla.' : '⚠️ No tienes licencia (cómprala en la comisaría): si la policía te ve armado, te detiene.'} Disparar en la calle sin motivo también es delito. Equipa con H, dispara con F.</p>` +
+          WEAPONS.map(w => { const o = Arms.inv[w.id]; return `<div class="hm-row"><span><b>${w.n}</b>${o ? ' · munición ' + o.ammo : ''}<br><small>${w.d}</small></span>${o ? `<button class="btn sm" data-a="${w.id}" ${Wallet.cents >= w.pp ? '' : 'disabled'}>+${w.pack} balas ${fmt(w.pp)}</button>` : `<button class="btn sm primary" data-w="${w.id}" ${Wallet.cents >= w.p ? '' : 'disabled'}>${fmt(w.p)}</button>`}</div>`; }).join('') + '<div class="acts"><button class="btn" id="arX">Cerrar</button></div>';
+        c.querySelector('#arX').onclick = () => UI.closeModal();
+        c.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { const w = WEAPONS.find(x => x.id === b.dataset.w); if (!Wallet.spend(w.p, 'Armería')) return; Arms.give(w.id, w.ammo); Sfx.play('coin'); draw(); });
+        c.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { const w = WEAPONS.find(x => x.id === b.dataset.a); if (!Wallet.spend(w.pp, 'Munición')) return; Arms.give(w.id, w.pack); Sfx.play('coin'); draw(); });
+      }; draw();
+    });
+  },
+};
+
+/* ---- 29_arms.js ---- */
+/* =====================================================================
+   ARMAS: inventario, licencia, H para sacar/guardar, F para disparar.
+   Los disparos injustificados avisan a la policía (servidor). Sin daño a
+   jugadores: asustan a los peatones y los compradores de la calle.
+   ===================================================================== */
+const Scare = { t: 0, x: 0, z: 0, r: 30 };
+const Arms = {
+  inv: Store.get('arms', {}), cur: '', mesh: null, cd: 0, last: 0,
+  save() { Store.set('arms', this.inv); },
+  give(id, n) { const o = this.inv[id] || (this.inv[id] = { ammo: 0 }); o.ammo += n; this.save(); UI.toast('🔫 ' + WEAPONS.find(w => w.id === id).n + ' · munición ' + o.ammo, 'good'); },
+  clear() { this.inv = {}; this.cur = ''; this.save(); this.drawMesh(); this.btn(); UI.toast('🚔 Te confiscan todas las armas', 'bad'); },
+  cycle() {
+    if (Crime.jailed()) return; const L = Object.keys(this.inv); if (!L.length) { UI.toast('No tienes armas. Cómpralas en la armería (Distrito Norte)', ''); return; }
+    const i = L.indexOf(this.cur); this.cur = i + 1 < L.length ? L[i + 1] : ''; this.drawMesh(); this.btn();
+    UI.toast(this.cur ? '🔫 ' + WEAPONS.find(w => w.id === this.cur).n + ' en la mano · F para disparar' + (CR.lic > Date.now() ? '' : ' · ⚠️ SIN LICENCIA') : 'Guardas el arma', this.cur && !(CR.lic > Date.now()) ? 'bad' : '');
+  },
+  btn() { let b = $('#firebtn'); if (!b) { b = document.createElement('button'); b.id = 'firebtn'; b.className = 'btn'; b.style.cssText = 'position:fixed;right:18px;bottom:130px;z-index:42;font-size:26px;padding:14px 18px;border-radius:50%'; b.textContent = '🔫'; b.onpointerdown = e => { e.preventDefault(); this.fire(); }; document.body.appendChild(b); } b.hidden = !this.cur; },
+  drawMesh() {
+    const P = World.player; if (!P || !P.h) return; if (this.mesh) { this.mesh.parent && this.mesh.parent.remove(this.mesh); this.mesh = null; }
+    if (!this.cur) return; const g = new THREE.Group(), M = c => new THREE.MeshBasicMaterial({ color: c }), box = (w, h, d, x, y, z, c) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(c)); m.position.set(x, y, z); g.add(m); return m; };
+    if (this.cur === 'pistol') { box(.07, .1, .3, 0, 0, .15, 0x22242a); box(.065, .15, .08, 0, -.11, .02, 0x14151a); g.position.set(.26, 1.12, .3); }
+    else if (this.cur === 'ak') { box(.08, .11, .95, 0, 0, .3, 0x1c1c20); box(.07, .22, .09, 0, -.15, .3, 0x4a3a22); box(.07, .08, .35, 0, .0, -.35, 0x4a3a22); g.position.set(.22, 1.12, .35); }
+    else { const t = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, 1.15, 10), M(0x3a4a2a)); t.rotation.x = Math.PI / 2; t.position.set(0, 0, .2); g.add(t); const w = new THREE.Mesh(new THREE.ConeGeometry(.13, .3, 10), M(0xc0392b)); w.rotation.x = Math.PI / 2; w.position.set(0, 0, .9); g.add(w); g.position.set(.3, 1.5, .2); }
+    this.mesh = g; this.base = g.position.z; P.h.root.add(g);
+  },
+  justified() { const P = World.player; return World.scene && World.scene.id === 'norte' && Math.hypot(P.x + 20, P.z + 45) < 9; },
+  fire() {
+    if (!this.cur || Crime.jailed()) return; const now = performance.now(); if (now < this.cd) return; const o = this.inv[this.cur], w = WEAPONS.find(x => x.id === this.cur);
+    if (!o || o.ammo <= 0) { UI.toast('Sin munición: compra más en la armería', 'bad'); this.cd = now + 500; return; }
+    this.cd = now + { pistol: 260, ak: 110, rpg: 1600 }[this.cur]; o.ammo--; this.save();
+    const P = World.player, dx = Math.sin(P.ry), dz = Math.cos(P.ry), sc = World.three.scene, y = this.cur === 'rpg' ? 1.5 : 1.2;
+    const ax = P.x + dx * .7, az = P.z + dz * .7, len = this.cur === 'rpg' ? 18 : 30;
+    const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(ax, y, az), new THREE.Vector3(ax + dx * len, y, az + dz * len)]), new THREE.LineBasicMaterial({ color: this.cur === 'rpg' ? 0xff8a30 : 0xffe28a })); sc.add(ln);
+    const fl = new THREE.Mesh(new THREE.SphereGeometry(this.cur === 'rpg' ? .35 : .16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd060 })); fl.position.set(ax, y, az); sc.add(fl);
+    setTimeout(() => { sc.remove(ln); sc.remove(fl); ln.geometry.dispose(); fl.geometry.dispose(); }, this.cur === 'rpg' ? 160 : 70);
+    if (this.mesh) { this.mesh.position.z = this.base - .12; setTimeout(() => { if (this.mesh) this.mesh.position.z = this.base; }, 70); }
+    Sfx.play(this.cur === 'pistol' ? 'pop' : this.cur === 'ak' ? 'boom' : 'thunder');
+    Scare.x = P.x; Scare.z = P.z; Scare.t = 4; Scare.r = this.cur === 'rpg' ? 55 : 30;
+    if (this.cur === 'rpg') this.boom(ax + dx * len, az + dz * len);
+    if (Net.mode === 'online' && now - this.last > 1500) { this.last = now; Net.transport.send({ t: 'shot', ok: this.justified() }); }
+    if (o.ammo === 0) UI.toast('Última bala gastada', '');
+  },
+  boom(x, z) {
+    setTimeout(() => {
+      const sc = World.three.scene, s = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff8a20, transparent: true, opacity: .9 })); s.position.set(x, 1.5, z); sc.add(s); Sfx.play('explode'); FX.flash && FX.flash('#ff8a30');
+      const t0 = performance.now(); const an = () => { const k = (performance.now() - t0) / 450; if (k >= 1) { sc.remove(s); s.geometry.dispose(); return; } s.scale.setScalar(1 + k * 5); s.material.opacity = .9 * (1 - k); requestAnimationFrame(an); }; an();
+      Scare.x = x; Scare.z = z; Scare.t = 5; Scare.r = 60;
+    }, 350);
+  },
+  init() {
+    addEventListener('keydown', e => {
+      if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return; if (UI.panelGame || !$('#modal').hidden || $('#hud').hidden) return;
+      if (e.code === 'KeyH') this.cycle(); else if (e.code === 'KeyF' && this.cur) { e.preventDefault(); this.fire(); }
+    });
+    setInterval(() => { const P = World.player; if (this.cur && P && P.h && this.mesh && this.mesh.parent !== P.h.root) this.drawMesh(); }, 700); this.btn();
+  },
+};
+
 /* ---- 99_main.js ---- */
 /* =====================================================================
    ARRANQUE
@@ -7581,7 +8073,7 @@ Games.snake = {
 (async function boot() {
   const bar = $('#ldbar'), txt = $('#ldtxt');
   const say = (k, t) => { bar.style.width = Math.round(k * 100) + '%'; if (t) txt.textContent = t; };
-  Wallet.init(); UI.init(); Chat.init(); Board.initButtons(); Prog.load(); Prog.hook(); Net.use(Net.auto()).then(() => NetHud.draw());
+  addEventListener('pagehide', () => { try { Wallet.save(); Prog.save(); } catch (e) { } }); Wallet.init(); UI.init(); Chat.init(); Board.initButtons(); Crime.init(); Arms.init(); Prog.load(); Prog.hook(); Net.use(Net.auto()).then(() => NetHud.draw());
   { const t = Prog.s.tour; if (t.day === dayNo() && t.joined && !t.done) Prog.tourFinish(0); }
   Prog.check(); Prog.render(); Phone.init(); $('#wallet').onclick = () => { if (!UI.panelGame && $('#modal').hidden) Hub.open('perfil'); };
   const glOk = (() => { try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl'))); } catch (e) { return false; } })();

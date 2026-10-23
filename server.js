@@ -23,7 +23,7 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
 const players = new Map(); // id -> { ws, state, lk, dirty, lkDirty, n, t0 }
 const clean = s => String(s || 'Jugador').replace(/[<>&"']/g, '').trim().slice(0, 16) || 'Jugador';
 const num = (v, lim = 1e6) => { v = +v; return Number.isFinite(v) ? Math.max(-lim, Math.min(lim, v)) : 0; };
-const SCENES = new Set(['city', 'avenida', 'casino', 'premier', 'vip', 'roof', 'burger', 'salera', 'sur', 'sotano', 'club', 'norte', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8']);
+const SCENES = new Set(['city', 'avenida', 'casino', 'premier', 'vip', 'roof', 'burger', 'salera', 'sur', 'sotano', 'club', 'norte', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'poli', 'carcel', 'armeria', 'growshop']);
 
 wss.on('connection', ws => {
   let me = null;
@@ -35,7 +35,7 @@ wss.on('connection', ws => {
       const id = String(m.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 16) || 'p' + Math.random().toString(36).slice(2, 10);
       const old = players.get(id); if (old && old.ws !== ws) try { old.ws.close(); } catch (e) { }
       me = { id, ws, state: { id, name: clean(m.name), scene: 'city', x: 0, y: 0, z: 0, ry: 0, mv: 0, m: 0, car: null }, lk: '', dirty: true, lkDirty: true, n: 0, t0: Date.now() };
-      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, bizMsg()); send(ws, sugMsgFor(id)); send(ws, { t: 'news', list: DB.news }); if (DB.el.votes[id]) send(ws, { t: 'myvote', id: DB.el.votes[id] }); if (DB.refunds[id]) { give(me, DB.refunds[id], 'Devolución pendiente'); delete DB.refunds[id]; saveDb(); } if (CAB) send(ws, cabMsg()); if (UFO) send(ws, { t: 'ufo', at: Date.now() - UFO.at, x: UFO.x, z: UFO.z }); send(ws, { t: 'ver', v: VER }); for (const k in RL) send(ws, rlMsg(k)); send(ws, occMsg()); for (const [k, L] of LIVE) send(ws, Object.assign({ t: 'live', k }, L)); return;
+      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, bizMsg()); send(ws, sugMsgFor(id)); send(ws, { t: 'news', list: DB.news }); if (DB.el.votes[id]) send(ws, { t: 'myvote', id: DB.el.votes[id] }); if (DB.refunds[id]) { give(me, DB.refunds[id], 'Devolución pendiente'); delete DB.refunds[id]; saveDb(); } crJoin(me); send(ws, { t: 'chathist', list: CHATLOG.concat(PRIVLOG[me.id] || []).sort((a, b) => a.at - b.at).slice(-40) }); if (CAB) send(ws, cabMsg()); if (UFO) send(ws, { t: 'ufo', at: Date.now() - UFO.at, x: UFO.x, z: UFO.z }); send(ws, { t: 'ver', v: VER }); for (const k in RL) send(ws, rlMsg(k)); send(ws, occMsg()); for (const [k, L] of LIVE) send(ws, Object.assign({ t: 'live', k }, L)); return;
     }
     if (!me) return;
     // límite de mensajes por segundo
@@ -44,10 +44,10 @@ wss.on('connection', ws => {
       const s = me.state;
       if (SCENES.has(m.scene)) s.scene = m.scene;
       s.x = num(m.x); s.y = num(m.y, 100); s.z = num(m.z); s.ry = num(m.ry, 100); s.mv = num(m.mv, 20); s.m = Math.round(num(m.m, 1e15));
-      s.g = typeof m.g === 'string' && /^[a-z]{0,12}$/.test(m.g) ? m.g : '';
+      s.w = typeof m.w === 'string' && /^[a-z]{0,8}$/.test(m.w) ? m.w : ''; s.g = typeof m.g === 'string' && /^[a-z]{0,12}$/.test(m.g) ? m.g : '';
       s.name = clean(m.name || s.name); s.car = typeof m.car === 'string' ? m.car.slice(0, 12) : null;
       s.cc = typeof m.cc === 'string' ? m.cc.slice(0, 9) : undefined; s.ct = m.ct && typeof m.ct === 'object' ? JSON.parse(JSON.stringify(m.ct).slice(0, 300) || '{}') : undefined;
-      if (typeof m.lk === 'string' && m.lk.length < 1200 && m.lk !== me.lk) { me.lk = m.lk; me.lkDirty = true; }
+      if (typeof m.lk === 'string' && m.lk.length < 1200 && m.lk !== me.lk) { me.lk = m.lk; me.lkDirty = true; crLook(me); }
       me.dirty = true;
     } else if (m.t === 'name') { me.state.name = clean(m.name); me.dirty = true; }
     else if (m.t === 'sync') { sendSnap(ws); jxTo(ws); }
@@ -73,6 +73,12 @@ wss.on('connection', ws => {
     else if (m.t === 'sugvote') sugVote(me, m);
     else if (m.t === 'ufoclaim') ufoClaim(me, m);
     else if (m.t === 'cabpick') cabPick(me, m);
+    else if (m.t === 'bz') bizum(me, m);
+    else if (m.t === 'role') crRoleMsg(me, m);
+    else if (m.t === 'd') crDeal(me, m);
+    else if (m.t === 'c') crCop(me, m);
+    else if (m.t === 'lic') crLic(me, m);
+    else if (m.t === 'shot') crShot(me, m);
     else if (m.t === 'jxbet') {
       const c = Math.round(num(m.c, 1e12));
       if (JX.ph !== 'wait' || c <= 0 || JX.bets.has(me.id)) { send(ws, { t: 'jxno', c }); return; }
@@ -80,7 +86,7 @@ wss.on('connection', ws => {
     } else if (m.t === 'jxcancel') { if (JX.ph === 'wait' && JX.bets.delete(me.id)) JX.bd = true; }
     else if (m.t === 'jxcash') { const b = JX.bets.get(me.id); if (JX.ph === 'fly' && b && !b.x) { const x = Math.floor(jxM(Date.now()) * 100) / 100; if (x < JX.crash) jxPay(b, x); } }
   });
-  ws.on('close', () => { if (me && players.get(me.id) === me) { occFree(me.id); players.delete(me.id); broadcast({ t: 'leave', id: me.id }); broadcastCount(); } });
+  ws.on('close', () => { if (me && players.get(me.id) === me) { occFree(me.id); crOff(me); players.delete(me.id); broadcast({ t: 'leave', id: me.id }); broadcastCount(); } });
 });
 
 function send(ws, o) { try { if (ws.readyState === 1) ws.send(JSON.stringify(o)); } catch (e) { } }
@@ -100,11 +106,14 @@ function feed(me, m) {
 const DATA = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const UP = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN ? { url: process.env.UPSTASH_REDIS_REST_URL.replace(/\/$/, ''), tok: process.env.UPSTASH_REDIS_REST_TOKEN } : null;
 let DB = { top: {}, mayor: null, el: null, gov: null, biz: {}, auc: null, refunds: {}, sug: [], news: [], fin: {} };
-try { DB = Object.assign(DB, JSON.parse(fs.readFileSync(DATA, 'utf8'))); } catch (e) { }
+for (const f of [DATA, DATA + '.bak']) { try { DB = Object.assign(DB, JSON.parse(fs.readFileSync(f, 'utf8'))); break; } catch (e) { } }
 let dbDirty = false; const saveDb = () => { dbDirty = true; };
 async function upCmd(args) { const r = await fetch(UP.url, { method: 'POST', headers: { Authorization: 'Bearer ' + UP.tok, 'Content-Type': 'application/json' }, body: JSON.stringify(args) }); return (await r.json()).result; }
 async function loadDb() { if (!UP) return; try { const v = await upCmd(['GET', 'neonroyale']); if (v) { DB = Object.assign(DB, JSON.parse(v)); console.log('Datos cargados de Upstash'); } } catch (e) { console.log('Upstash no disponible:', e.message); } }
-setInterval(() => { if (!dbDirty) return; dbDirty = false; const j = JSON.stringify(DB); fs.writeFile(DATA, j, () => { }); if (UP) upCmd(['SET', 'neonroyale', j]).catch(() => { dbDirty = true; }); }, UP ? 20000 : 10000);
+const flushSync = () => { try { const j = JSON.stringify(DB); fs.writeFileSync(DATA + '.tmp', j); try { fs.copyFileSync(DATA, DATA + '.bak'); } catch (e) { } fs.renameSync(DATA + '.tmp', DATA); } catch (e) { } };
+setInterval(() => { if (!dbDirty) return; dbDirty = false; flushSync(); if (UP) upCmd(['SET', 'neonroyale', JSON.stringify(DB)]).catch(() => { dbDirty = true; }); }, UP ? 15000 : 8000);
+let _bye = false; const bye = () => { if (_bye) return; _bye = true; flushSync(); const j = JSON.stringify(DB); if (UP) upCmd(['SET', 'neonroyale', j]).catch(() => { }).finally(() => process.exit(0)); else process.exit(0); setTimeout(() => process.exit(0), 3000); };
+process.on('SIGTERM', bye); process.on('SIGINT', bye);
 const news = (txt, k = 'evento') => { DB.news.unshift({ txt, k, at: Date.now() }); DB.news = DB.news.slice(0, 40); saveDb(); broadcast({ t: 'news', list: DB.news }); };
 const byName = n => { n = String(n || '').toLowerCase(); for (const p of players.values()) if (p.state.name.toLowerCase() === n) return p; return null; };
 const give = (p, c, why) => send(p.ws, { t: 'gift', c, why });
@@ -167,7 +176,7 @@ let cityD = false; const dirtyCity = () => { cityD = true; saveDb(); };
 
 // ---------- Negocios: un solo dueño por negocio. Kiosco y Cafetería para el primero que los compre; el resto, en subasta diaria ----------
 const BIZ = { kiosk: 150000, cafe: 800000, phones: 2500000, club: 15000000, bowling: 9000000, gym: 6000000, wash: 4500000, beach: 2000000 };
-const FIRST = new Set(['kiosk', 'cafe']), AUC_MS = 24 * 3600e3;
+const FIRST = new Set(['kiosk', 'cafe']), AUC_MS = 15 * 60e3, AUC_ADD = 60e3;
 const bizMsg = () => ({ t: 'biz', own: DB.biz, auc: DB.auc && Object.assign({}, DB.auc, { left: DB.auc.ends - Date.now() }) });
 let bizD = false; const dirtyBiz = () => { bizD = true; saveDb(); };
 function bizBuy(me, m) {
@@ -180,27 +189,32 @@ function bizClaim(me, m) { // compras hechas antes de que existieran los dueños
   const id = String(m.id || ''); if (!(id in BIZ)) return; if (!DB.biz[id] && FIRST.has(id)) { DB.biz[id] = { owner: me.id, n: me.state.name, since: Date.now() }; dirtyBiz(); }
   else if (!DB.biz[id] || DB.biz[id].owner !== me.id) send(me.ws, { t: 'bizlost', id });
 }
+const aucEv = (k, txt) => broadcast({ t: 'aucev', k, txt });
 function nextAuction() {
+  if (DB.auc) return;
   const free = Object.keys(BIZ).filter(id => !FIRST.has(id) && !DB.biz[id]); if (!free.length) { DB.auc = null; return; }
   const last = DB.aucLast || ''; const id = free[(free.indexOf(last) + 1) % free.length] || free[0];
-  DB.aucLast = id; DB.auc = { id, min: BIZ[id], ends: Date.now() + AUC_MS, top: null, n: 0 }; dirtyBiz(); news('🔨 Nueva subasta: ' + id + ' · puja mínima ' + (BIZ[id] / 100).toLocaleString('es-ES') + ' €', 'subasta');
+  DB.aucLast = id; DB.auc = { id, min: BIZ[id], ends: Date.now() + AUC_MS, top: null, n: 0 }; dirtyBiz(); aucEv('start', '🔨 SUBASTA: ' + id + ' · precio inicial ' + (BIZ[id] / 100).toLocaleString('es-ES') + ' € · 15 min'); news('🔨 Nueva subasta: ' + id + ' · puja mínima ' + (BIZ[id] / 100).toLocaleString('es-ES') + ' €', 'subasta');
 }
 function bid(me, m) {
   const a = DB.auc, c = Math.round(num(m.c, 1e13)); if (!a || String(m.id) !== a.id) return send(me.ws, { t: 'bidno', c, why: 'Esa subasta ya terminó' });
   const need = a.top ? Math.ceil(a.top.c * 1.05) : a.min; if (c < need) return send(me.ws, { t: 'bidno', c, why: 'La puja mínima ahora es ' + (need / 100).toFixed(2) + ' €' });
-  if (a.top && a.top.id === me.id) { owe(me.id, a.top.c, 'Devolución de tu puja anterior'); } else if (a.top) owe(a.top.id, a.top.c, 'Te han superado en la subasta');
-  a.top = { id: me.id, n: me.state.name, c }; a.n++; if (a.ends - Date.now() < 120000) a.ends = Date.now() + 120000; dirtyBiz();
+  const prev = a.top;
+  if (prev) { owe(prev.id, prev.c, 'Devolución de tu puja en ' + a.id); const pp = players.get(prev.id); pp && send(pp.ws, { t: 'aucev', k: 'out', txt: '⚠️ ' + me.state.name + ' te ha superado en ' + a.id + ' con ' + (c / 100).toLocaleString('es-ES') + ' €. Tu puja (' + (prev.c / 100).toLocaleString('es-ES') + ' €) te ha sido devuelta.' }); }
+  a.top = { id: me.id, n: me.state.name, c }; a.n++; a.ends += AUC_ADD; dirtyBiz();
+  aucEv('bid', '💰 ' + me.state.name + ' puja ' + (c / 100).toLocaleString('es-ES') + ' € por ' + a.id + ' (+1 min)');
 }
 if (DB.auc === null || DB.auc === undefined) setTimeout(nextAuction, 1000);
 
 // ---------- Chat, privados y comandos ----------
 const ADMIN = process.env.ADMIN_PASS || ''; // la contraseña se pone en Render (Environment), nunca en el código
+const CHATLOG = [], PRIVLOG = {}; // historial en memoria para quien entra o se reconecta
 function chat(me, m) {
   let txt = String(m.txt || '').replace(/[<>]/g, '').trim().slice(0, 200); if (!txt) return;
   const now = Date.now(); if (now - (me.lastChat || 0) < 700) return; me.lastChat = now;
   if (txt[0] === '/') return command(me, txt);
-  if (m.to) { const p = players.get(String(m.to)); if (!p) return send(me.ws, { t: 'chat', sys: true, txt: 'Ese jugador no está conectado' }); const o = { t: 'chat', priv: true, pid: me.id, n: me.state.name, to: p.id, tn: p.state.name, txt, at: now }; send(p.ws, o); send(me.ws, o); return; }
-  broadcast({ t: 'chat', pid: me.id, n: me.state.name, txt, at: now });
+  if (m.to) { const p = players.get(String(m.to)); if (!p) return send(me.ws, { t: 'chat', sys: true, txt: 'Ese jugador no está conectado' }); const o = { t: 'chat', id: now.toString(36) + Math.random().toString(36).slice(2, 5), priv: true, pid: me.id, n: me.state.name, to: p.id, tn: p.state.name, txt, at: now }; send(p.ws, o); send(me.ws, o); for (const k of [me.id, p.id]) { const L = PRIVLOG[k] || (PRIVLOG[k] = []); L.push(o); if (L.length > 30) L.shift(); } return; }
+  const o = { t: 'chat', id: now.toString(36) + Math.random().toString(36).slice(2, 5), pid: me.id, n: me.state.name, txt, at: now }; CHATLOG.push(o); if (CHATLOG.length > 40) CHATLOG.shift(); broadcast(o);
 }
 function command(me, txt) {
   const [cmd, ...a] = txt.split(/\s+/), sys = t => send(me.ws, { t: 'chat', sys: true, txt: t });
@@ -260,6 +274,131 @@ function cabEnd(k) {
   broadcast({ t: 'cabend', txt }); news('🏛️ ' + txt, 'alcaldia'); CAB = null; dirtyCity(); saveDb();
 }
 
+// ---------- Crimen: distribuidor (rol secreto único), policía único, pruebas, cárcel, licencias de armas y Bizum ----------
+// Todo lo que decide el resultado (roles, pruebas, detenciones, condenas, recompensas, ventas y precios) se calcula aquí.
+if (!DB.cr) DB.cr = {};
+for (const k of ['jail', 'ban', 'dban', 'lic', 'hist', 'shots']) if (!DB.cr[k]) DB.cr[k] = k === 'shots' ? [] : {};
+if (!DB.cr.clues) DB.cr.clues = [];
+const CRM = DB.cr, crSave = saveDb;
+const COLS = [['rojo', 255, 0, 0], ['naranja', 255, 140, 0], ['amarillo', 240, 220, 0], ['verde', 0, 170, 60], ['turquesa', 0, 200, 200], ['azul', 20, 60, 220], ['morado', 130, 50, 200], ['rosa', 255, 80, 170], ['marrón', 110, 70, 30], ['negro', 20, 20, 20], ['gris', 130, 130, 130], ['blanco', 240, 240, 240]];
+function colName(h) { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '')); if (!m) return 'oscuro'; const v = parseInt(m[1], 16), r = v >> 16, g = v >> 8 & 255, b = v & 255; let best = 'gris', bd = 1e9; for (const [n, R, G, B] of COLS) { const d = (r - R) ** 2 + (g - G) ** 2 + (b - B) ** 2; if (d < bd) { bd = d; best = n; } } return best; }
+function sigOf(p) { let l = {}; try { l = JSON.parse(p.lk || '{}') || {}; } catch (e) { } return { mk: !!l.mk, s: colName(l.shirt), p: colName(l.pants), h: colName(l.hair) }; }
+const descOf = g => g.mk ? 'Persona enmascarada con sudadera ' + g.s : 'Camiseta ' + g.s + ', pantalón ' + g.p + ', pelo ' + g.h;
+const SPOTS = [[8, 56, 'Plaza del Neón'], [-50, 45, 'Parque Central'], [14, 114, 'la playa'], [0, -45, 'Neon Park'], [32, -72, 'el Karting'], [-40, -52, 'los recreativos']];
+const isCop = p => !!(CRM.cop && CRM.cop.id === p.id), isDeal = p => !!(CRM.deal && CRM.deal.id === p.id);
+const jailed = id => { const j = CRM.jail[id]; return !!(j && j.until > Date.now()); };
+const sysTo = (me, t) => send(me.ws, { t: 'chat', sys: true, txt: t });
+const hasLic = id => (CRM.lic[id] || 0) > Date.now();
+function near(me, r, scene) { let best = null, bd = r; for (const p of players.values()) { if (p === me || p.state.scene !== me.state.scene) continue; const d = Math.hypot(p.state.x - me.state.x, p.state.z - me.state.z); if (d < bd) { bd = d; best = p; } } return best; }
+const copId = () => broadcast({ t: 'copid', id: CRM.cop ? CRM.cop.id : '' });
+function crRoleMsg0(me) { send(me.ws, { t: 'role', r: isCop(me) ? 'cop' : isDeal(me) ? 'dealer' : '', until: CRM.ban[me.id] || 0 }); if (isCop(me)) crCopMsg(me); if (isDeal(me)) crDealMsg(me); }
+function crCopMsg(me) { const n = Date.now(); send(me.ws, { t: 'copinfo', deal: !!CRM.deal, ev: (CRM.cop.ev || []).length, clues: CRM.clues.filter(c => (CRM.cop.known || []).includes(c.id) && n - c.t < 1800000).slice(0, 25).map(clueOut), shots: CRM.shots.filter(x => n - x.t < 600000).slice(0, 10).map(x => ({ t: x.t, zone: x.zone, desc: x.desc })) }); }
+const clueOut = c => ({ id: c.id, t: c.t, spot: SPOTS[c.spot][2], desc: c.desc, q: c.q });
+function crDealMsg(me) { const D = CRM.deal, I = D.inv, n = Date.now(); send(me.ws, { t: 'dstate', seeds: I.seeds, prod: I.prod, lamp: I.lamp, slots: [0, 3, 6, 10][I.lamp], plants: I.plants.map(t => Math.max(0, Math.ceil((GROW - (n - t)) / 1000))), mask: D.mask, house: D.house, sales: D.sales, cool: SPOTS.map((x, i) => Math.max(0, Math.ceil(((D.spots[i] || 0) - n) / 1000))) }); }
+const FAST = !!process.env.GROW_MS, GROW = +process.env.GROW_MS || 150000; // GROW_MS solo para pruebas
+function crRoleMsg(me, m) {
+  const r = m.r, on = !!m.on, n = Date.now();
+  if (jailed(me.id)) return sysTo(me, 'Estás en la cárcel');
+  if (r === 'cop') {
+    if (!on) { if (isCop(me)) { CRM.cop = null; news('👮 ' + me.state.name + ' deja el cuerpo de policía'); crSave(); copId(); } return crRoleMsg0(me); }
+    if (CRM.cop && CRM.cop.id !== me.id) return sysTo(me, 'Ya hay un policía de servicio: ' + CRM.cop.n);
+    if ((CRM.ban[me.id] || 0) > n) return sysTo(me, 'Estás sancionado: no puedes ser policía durante ' + Math.ceil((CRM.ban[me.id] - n) / 60000) + ' min');
+    if (isDeal(me)) return sysTo(me, 'No puedes ser policía y distribuidor a la vez');
+    if (!CRM.cop) { CRM.cop = { id: me.id, n: me.state.name, at: n, paid: n, ev: [], off: 0 }; news('👮 ' + me.state.name + ' es ahora el policía de la ciudad', 'policia'); crSave(); } copId();
+    return crRoleMsg0(me);
+  }
+  if (r === 'dealer') {
+    if (!on) { if (isDeal(me)) { CRM.deal = null; crSave(); } return crRoleMsg0(me); }
+    if (CRM.deal && CRM.deal.id !== me.id) return sysTo(me, 'Ese puesto no está disponible ahora mismo');
+    if ((CRM.dban[me.id] || 0) > n) return sysTo(me, 'Te vigilan de cerca: espera ' + Math.ceil((CRM.dban[me.id] - n) / 60000) + ' min');
+    if (isCop(me)) return sysTo(me, 'No puedes ser policía y distribuidor a la vez');
+    if (!m.house && !CRM.deal) return sysTo(me, 'Necesitas una casa propia para operar');
+    if (!CRM.deal) { CRM.deal = { id: me.id, n: me.state.name, since: n, inv: { seeds: 0, plants: [], prod: 0, lamp: 1 }, house: null, sales: 0, msales: 0, changes: 0, first: 0, mask: false, last: 0, spots: {}, off: 0 }; crSave(); }
+    return crRoleMsg0(me);
+  }
+}
+function crDeal(me, m) {
+  const D = CRM.deal; if (!D || D.id !== me.id || jailed(me.id)) return; const n = Date.now(), a = m.a, I = D.inv, slots = [0, 3, 6, 10][I.lamp];
+  if (a === 'seed') I.seeds += Math.max(1, Math.min(10, Math.floor(num(m.n, 1e3))));
+  else if (a === 'lamp') { if (I.lamp < 3) I.lamp++; }
+  else if (a === 'plant') { const h = String(m.house || ''); if (!/^h\d$/.test(h)) return sysTo(me, 'Solo puedes plantar dentro de tu casa'); const k = Math.min(Math.floor(num(m.n, 1e3)), I.seeds, slots - I.plants.length); if (k <= 0) return sysTo(me, 'No tienes semillas o espacio'); I.seeds -= k; for (let i = 0; i < k; i++) I.plants.push(n); D.house = h; }
+  else if (a === 'harvest') { let k = 0; I.plants = I.plants.filter(t => { if (n - t >= GROW) { k++; return false; } return true; }); I.prod += k * [0, 3, 4, 5][I.lamp]; if (!k) return sysTo(me, 'Todavía no hay plantas listas'); }
+  else if (a === 'mask') D.mask = !!m.on;
+  else if (a === 'sell') {
+    const s = m.s | 0, sp = SPOTS[s]; if (!sp) return; if (Math.hypot(me.state.x - sp[0], me.state.z - sp[1]) > 9) return sysTo(me, 'Acércate al comprador');
+    if (n - D.last < (FAST ? 200 : 8000)) return sysTo(me, 'Espera unos segundos: llamas la atención'); if ((D.spots[s] || 0) > n) return sysTo(me, 'Este comprador ya ha comprado hace poco'); if (I.prod <= 0) return sysTo(me, 'No te queda producto');
+    const q = Math.min(I.prod, 1 + Math.floor(Math.random() * 2)), price = q * (4000 + Math.floor(Math.random() * 2001));
+    I.prod -= q; D.last = n; D.spots[s] = n + (FAST ? 300 : 60000); D.sales += q; if (!D.first) D.first = n; if (D.mask) D.msales += q;
+    give(me, price, 'Venta de hierba'); send(me.ws, { t: 'sold', s, q });
+    if (Math.random() < .85) { const g = sigOf(me); CRM.clues.unshift({ id: n.toString(36) + Math.random().toString(36).slice(2, 4), t: n, spot: s, sig: g, q: g.mk ? 1 : 2, desc: descOf(g) }); CRM.clues = CRM.clues.slice(0, 60); if (CRM.cop) { const cp = players.get(CRM.cop.id); if (cp) send(cp.ws, { t: 'alert', txt: '📞 Aviso vecinal: movimiento sospechoso cerca de ' + sp[2] + '. Interroga a los testigos de la zona.' }); } }
+  }
+  crSave(); crDealMsg(me);
+}
+function crJail(p, ms, why) { if (FAST) ms = Math.min(ms, 6000); CRM.jail[p.id] = { until: Date.now() + ms, why }; send(p.ws, { t: 'jail', ms, why }); if (isDeal(p)) { CRM.deal = null; send(p.ws, { t: 'role', r: '', until: 0 }); } crSave(); }
+function crSanction(me, why) {
+  const n = Date.now(); CRM.ban[me.id] = n + 900000; if (isCop(me)) CRM.cop = null; copId(); crJail(me, 120000, why); send(me.ws, { t: 'fine', c: 100000 }); send(me.ws, { t: 'role', r: '', until: CRM.ban[me.id] });
+  news('🚨 ' + me.state.name + ' pierde la placa por una detención sin pruebas válidas (15 min fuera del cuerpo)', 'policia');
+}
+const matchPts = (T, evs) => { const g = sigOf(T); let pts = 0; const kn = (CRM.cop && CRM.cop.known) || []; for (const c of CRM.clues) { if (Date.now() - c.t > 1800000 || !kn.includes(c.id)) continue; const o = c.sig; if (o.mk ? o.s === g.s : (o.s === g.s && o.p === g.p)) pts += c.q; } for (const e of evs) if (e.pid === T.id && Date.now() - e.at < 1800000) pts += e.q; return pts; };
+function crCop(me, m) {
+  if (!isCop(me) || jailed(me.id)) return; const C = CRM.cop, n = Date.now(), a = m.a;
+  if (a === 'sync') return crCopMsg(me);
+  if (a === 'ask') { const sp = SPOTS[m.s | 0]; if (!sp || Math.hypot(me.state.x - sp[0], me.state.z - sp[1]) > 9) return sysTo(me, 'Acércate al testigo'); if (n - (C.lq || 0) < (FAST ? 100 : 8000)) return sysTo(me, 'Dale un momento al testigo'); C.lq = n; C.known = C.known || []; const c = CRM.clues.find(x => x.spot === (m.s | 0) && n - x.t < 1800000 && !C.known.includes(x.id)); if (!c) return send(me.ws, { t: 'cev', txt: '🗣️ El testigo no ha visto nada raro por aquí (o ya te lo contó).' }); C.known.push(c.id); crCopMsg(me); return send(me.ws, { t: 'cev', txt: '🗣️ Testigo: «Vi a alguien sospechoso: ' + c.desc.toLowerCase() + '». Anotado en tu cuaderno.' }); }
+  if (a === 'search') {
+    const sc = me.state.scene; if (!/^h\d$/.test(sc)) return sysTo(me, 'Tienes que estar dentro de una casa para registrarla'); if (n - (C.ls || 0) < (FAST ? 200 : 15000)) return sysTo(me, 'Espera 15 segundos entre registros'); C.ls = n; const D = CRM.deal;
+    if (D && D.house === sc && D.inv.plants.length) { C.ev.push({ k: 'plantacion', pid: D.id, q: 6, at: n }); send(me.ws, { t: 'cev', txt: '🌿 ¡Plantación de marihuana encontrada! Propietario de la casa: ' + D.n + '. Prueba guardada en tu cuaderno.' }); return crCopMsg(me); }
+    return send(me.ws, { t: 'cev', txt: 'Registras la casa: no encuentras nada sospechoso.' });
+  }
+  const T = near(me, a === 'arrest' ? 4 : 6); if (!T) return sysTo(me, 'No hay nadie lo bastante cerca');
+  if (a === 'inspect') { const g = sigOf(T); return send(me.ws, { t: 'insp', n: g.mk ? '??? (enmascarado)' : T.state.name, desc: descOf(g), w: T.state.w || '', lic: hasLic(T.id) }); }
+  if (a === 'arrest') {
+    if (n - (C.la || 0) < (FAST ? 300 : 20000)) return sysTo(me, 'Espera 20 segundos entre detenciones'); C.la = n; if (isCop(T)) return;
+    const armed = !!T.state.w && !hasLic(T.id), shots = CRM.shots.some(x => x.pid === T.id && n - x.t < 300000);
+    if (isDeal(T)) {
+      const D = CRM.deal, pts = matchPts(T, C.ev);
+      if (pts >= 5) {
+        const mins = D.first ? Math.min(60, Math.floor((n - D.first) / 60000)) : 0, reward = 5000 + mins * 250 + Math.min(10, D.changes) * 1500 + Math.min(20, D.msales) * 300;
+        broadcast({ t: 'scare', x: T.state.x, z: T.state.z }); crJail(T, 300000, 'Detenido por tráfico de marihuana'); send(T.ws, { t: 'fine', c: 500000 }); send(T.ws, { t: 'bust', house: D.house }); CRM.dban[T.id] = n + 600000; CRM.deal = null; CRM.clues = []; C.ev = []; C.won = (C.won || 0) + 1;
+        give(me, reward * 100, 'Recompensa por detener al distribuidor'); news('👮 ¡' + me.state.name + ' detiene a ' + T.state.name + ', el distribuidor de marihuana! Recompensa: ' + reward.toLocaleString('es-ES') + ' €', 'policia'); crSave(); return crCopMsg(me);
+      }
+      return crSanction(me, 'Detención sin pruebas válidas');
+    }
+    if (armed || shots) { broadcast({ t: 'scare', x: T.state.x, z: T.state.z }); crJail(T, 120000, armed ? 'Arma sin licencia' : 'Disparos injustificados'); send(T.ws, { t: 'fine', c: 100000 }); send(T.ws, { t: 'seize' }); give(me, 50000, 'Detención válida'); news('👮 ' + T.state.name + ' detenido por ' + (armed ? 'portar un arma sin licencia' : 'disparar en la calle'), 'policia'); return; }
+    return crSanction(me, 'Detención sin pruebas válidas');
+  }
+}
+function crLic(me, m) { const n = Date.now(); if (m.a === 'buy') { CRM.lic[me.id] = n + 7200000; send(me.ws, { t: 'lic', until: CRM.lic[me.id] }); crSave(); } }
+function crShot(me, m) {
+  if (m.ok) return; const n = Date.now(); let zone = 'la ciudad', bd = 60; for (const [x, z, nm] of SPOTS) { const d = Math.hypot(me.state.x - x, me.state.z - z); if (d < bd) { bd = d; zone = nm; } }
+  const g = sigOf(me); CRM.shots.unshift({ pid: me.id, t: n, zone, desc: descOf(g) }); CRM.shots = CRM.shots.slice(0, 30);
+  if (CRM.cop) { const cp = players.get(CRM.cop.id); if (cp) send(cp.ws, { t: 'alert', txt: '🔫 Disparos cerca de ' + zone + ' · ' + descOf(g) }); } broadcast({ t: 'shotfx', x: me.state.x, z: me.state.z });
+}
+function bizum(me, m) {
+  const c = Math.round(num(m.c, 1e9)), nonce = String(m.n || '').slice(0, 24), n = Date.now(), fail = why => send(me.ws, { t: 'bzr', ok: false, why, c, n: nonce });
+  if (!(c >= 100 && c <= 500000)) return fail('Importe no válido (de 1 € a 5.000 €)'); if (!nonce) return fail('Operación no válida');
+  me.bzn = me.bzn || []; if (me.bzn.includes(nonce)) return; if (n - (me.bzt || 0) < (FAST ? 100 : 2000)) return fail('Espera 2 segundos entre transferencias'); me.bzt = n;
+  let to = players.get(String(m.to || '')), tid = to ? to.id : String(m.to || '').replace(/[^a-z0-9]/gi, ''), tn = to ? to.state.name : (DB.top[tid] || {}).n;
+  if (!to && !tn) { const q = String(m.to || '').toLowerCase(); to = byName(q); if (to) { tid = to.id; tn = to.state.name; } else for (const r of Object.values(DB.top)) if ((r.n || '').toLowerCase() === q) { tid = r.id; tn = r.n; } }
+  if (!tn) return fail('No encuentro a ese jugador'); if (tid === me.id) return fail('No puedes enviarte dinero a ti mismo');
+  me.bzn.push(nonce); me.bzn = me.bzn.slice(-60);
+  if (to) give(to, c, 'Bizum de ' + me.state.name); else { DB.refunds[tid] = (DB.refunds[tid] || 0) + c; }
+  const H = (id, o) => { const L = CRM.hist[id] || (CRM.hist[id] = []); L.unshift(Object.assign({ t: n }, o)); CRM.hist[id] = L.slice(0, 30); };
+  H(me.id, { k: 'out', n: tn, c }); H(tid, { k: 'in', n: me.state.name, c }); crSave();
+  send(me.ws, { t: 'bzr', ok: true, c, to: tn, n: nonce, hist: CRM.hist[me.id] }); if (to) send(to.ws, { t: 'bzh', hist: CRM.hist[tid] });
+}
+function crJoin(me) {
+  const n = Date.now(); if (CRM.cop && CRM.cop.id === me.id) CRM.cop.off = 0; if (CRM.deal && CRM.deal.id === me.id) CRM.deal.off = 0;
+  crRoleMsg0(me); send(me.ws, { t: 'copid', id: CRM.cop ? CRM.cop.id : '' }); send(me.ws, { t: 'bzh', hist: CRM.hist[me.id] || [] }); if (jailed(me.id)) send(me.ws, { t: 'jail', ms: CRM.jail[me.id].until - n, why: CRM.jail[me.id].why }); if (hasLic(me.id)) send(me.ws, { t: 'lic', until: CRM.lic[me.id] });
+}
+function crOff(me) { const n = Date.now(); if (CRM.cop && CRM.cop.id === me.id) CRM.cop.off = n; if (CRM.deal && CRM.deal.id === me.id) CRM.deal.off = n; }
+function crLook(me) { if (!isDeal(me)) return; const g = sigOf(me), o = CRM.deal.sg; if (o && (o.s !== g.s || o.p !== g.p || o.h !== g.h)) { CRM.deal.changes = Math.min(10, CRM.deal.changes + 1); } CRM.deal.sg = g; }
+setInterval(() => {
+  const n = Date.now();
+  for (const id in CRM.jail) if (CRM.jail[id].until <= n) { delete CRM.jail[id]; const p = players.get(id); if (p) send(p.ws, { t: 'free' }); crSave(); }
+  if (CRM.cop) { if (CRM.cop.off && n - CRM.cop.off > 600000) { CRM.cop = null; crSave(); copId(); } else if (n - CRM.cop.paid >= 600000) { CRM.cop.paid = n; const p = players.get(CRM.cop.id); if (p) give(p, 83300, 'Sueldo de policía'); } }
+  if (CRM.deal && CRM.deal.off && n - CRM.deal.off > 600000) { CRM.deal = null; crSave(); }
+}, 5000);
+
 // ---------- Evento OVNI: cada 40-70 minutos (o con /ufo) aterriza en la ciudad ----------
 const UFO_SPOTS = [[0, 56], [0, 1], [-14, 116], [60, 2]];
 let UFO = null, ufoNext = Date.now() + (40 + Math.random() * 30) * 60000;
@@ -277,7 +416,7 @@ setInterval(() => {
   // sueldo del alcalde (sale del tesoro municipal), cada 10 minutos si está conectado
   const g = DB.gov; if (now - g.paidAt >= 600000) { g.paidAt = now; const mp = DB.mayor && players.get(DB.mayor.id), pay = Math.min(Math.round(g.salary / 6), Math.floor(g.treasury)); if (mp && pay > 0) { g.treasury -= pay; give(mp, pay, 'Sueldo de alcalde'); cityD = true; } }
   // subastas
-  if (DB.auc && now >= DB.auc.ends) { const a = DB.auc; if (a.top) { DB.biz[a.id] = { owner: a.top.id, n: a.top.n, since: now }; news('🔨 ' + a.top.n + ' gana la subasta de ' + a.id + ' por ' + (a.top.c / 100).toLocaleString('es-ES') + ' €', 'subasta'); const p = players.get(a.top.id); p && send(p.ws, { t: 'chat', sys: true, txt: '¡Has ganado la subasta! El negocio ya es tuyo.' }); } else news('🔨 La subasta de ' + a.id + ' terminó sin pujas', 'subasta'); nextAuction(); }
+  if (DB.auc && now >= DB.auc.ends) { const a = DB.auc; if (a.top) { DB.biz[a.id] = { owner: a.top.id, n: a.top.n, since: now }; const t = (a.top.c / 100).toLocaleString('es-ES') + ' €'; news('🔨 ' + a.top.n + ' gana la subasta de ' + a.id + ' por ' + t, 'subasta'); aucEv('end', '🏆 ' + a.top.n + ' gana ' + a.id + ' por ' + t); const p = players.get(a.top.id); p && send(p.ws, { t: 'chat', sys: true, txt: '¡Has ganado la subasta! El negocio ya es tuyo.' }); } else { news('🔨 Subasta de ' + a.id + ' sin pujas: se adjudica al precio inicial al Ayuntamiento y vuelve a salir más adelante', 'subasta'); aucEv('end', '🔨 ' + a.id + ': sin pujas, adjudicado al precio inicial (' + (a.min / 100).toLocaleString('es-ES') + ' €) al Ayuntamiento'); } DB.auc = null; dirtyBiz(); setTimeout(nextAuction, 20000); }
   else if (!DB.auc && Math.random() < .002) nextAuction();
   if (now >= ufoNext && players.size) ufoStart();
   if (UFO && now - UFO.at > 100000) UFO = null;

@@ -35,7 +35,7 @@ wss.on('connection', ws => {
       const id = String(m.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 16) || 'p' + Math.random().toString(36).slice(2, 10);
       const old = players.get(id); if (old && old.ws !== ws) try { old.ws.close(); } catch (e) { }
       me = { id, ws, state: { id, name: clean(m.name), scene: 'city', x: 0, y: 0, z: 0, ry: 0, mv: 0, m: 0, car: null }, lk: '', dirty: true, lkDirty: true, n: 0, t0: Date.now() };
-      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, bizMsg()); send(ws, sugMsgFor(id)); send(ws, { t: 'news', list: DB.news }); if (DB.el.votes[id]) send(ws, { t: 'myvote', id: DB.el.votes[id] }); if (DB.refunds[id]) { give(me, DB.refunds[id], 'Devolución pendiente'); delete DB.refunds[id]; saveDb(); } crJoin(me); send(ws, { t: 'chathist', list: CHATLOG.concat(PRIVLOG[me.id] || []).sort((a, b) => a.at - b.at).slice(-40) }); if (CAB) send(ws, cabMsg()); if (UFO) send(ws, { t: 'ufo', at: Date.now() - UFO.at, x: UFO.x, z: UFO.z }); send(ws, { t: 'ver', v: VER }); for (const k in RL) send(ws, rlMsg(k)); send(ws, occMsg()); for (const [k, L] of LIVE) send(ws, Object.assign({ t: 'live', k }, L)); return;
+      players.set(id, me); sendSnap(ws); broadcastCount(); jxTo(ws); send(ws, topMsg()); send(ws, cityMsg()); send(ws, bizMsg()); send(ws, homesMsg()); send(ws, sugMsgFor(id)); send(ws, { t: 'news', list: DB.news }); if (DB.el.votes[id]) send(ws, { t: 'myvote', id: DB.el.votes[id] }); if (DB.refunds[id]) { give(me, DB.refunds[id], 'Devolución pendiente'); delete DB.refunds[id]; saveDb(); } crJoin(me); send(ws, { t: 'chathist', list: CHATLOG.concat(PRIVLOG[me.id] || []).sort((a, b) => a.at - b.at).slice(-40) }); if (CAB) send(ws, cabMsg()); if (UFO) send(ws, { t: 'ufo', at: Date.now() - UFO.at, x: UFO.x, z: UFO.z }); send(ws, { t: 'ver', v: VER }); for (const k in RL) send(ws, rlMsg(k)); send(ws, occMsg()); for (const [k, L] of LIVE) send(ws, Object.assign({ t: 'live', k }, L)); return;
     }
     if (!me) return;
     // límite de mensajes por segundo
@@ -53,6 +53,10 @@ wss.on('connection', ws => {
     else if (m.t === 'sync') { sendSnap(ws); jxTo(ws); }
     else if (m.t === 'tx') feed(me, m);
     else if (m.t === 'stats') stats(me, m);
+    else if (m.t === 'adm') admAct(me, m);
+    else if (m.t === 'hbuy') homeBuy(me, m);
+    else if (m.t === 'hsell') homeSell(me, m);
+    else if (m.t === 'hclaim') homeClaim(me, m);
     else if (m.t === 'rlbet') rlBet(me, m);
     else if (m.t === 'occ') occ(me, m);
     else if (m.t === 'live') live(me, m);
@@ -86,7 +90,7 @@ wss.on('connection', ws => {
     } else if (m.t === 'jxcancel') { if (JX.ph === 'wait' && JX.bets.delete(me.id)) JX.bd = true; }
     else if (m.t === 'jxcash') { const b = JX.bets.get(me.id); if (JX.ph === 'fly' && b && !b.x) { const x = Math.floor(jxM(Date.now()) * 100) / 100; if (x < JX.crash) jxPay(b, x); } }
   });
-  ws.on('close', () => { if (me && players.get(me.id) === me) { occFree(me.id); crOff(me); players.delete(me.id); broadcast({ t: 'leave', id: me.id }); broadcastCount(); } });
+  ws.on('close', () => { if (me && players.get(me.id) === me) { admOff(me); occFree(me.id); crOff(me); players.delete(me.id); broadcast({ t: 'leave', id: me.id }); broadcastCount(); } });
 });
 
 function send(ws, o) { try { if (ws.readyState === 1) ws.send(JSON.stringify(o)); } catch (e) { } }
@@ -105,7 +109,7 @@ function feed(me, m) {
 // también en una base de datos Redis gratuita (Upstash) para que no se pierdan al reiniciar Render.
 const DATA = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const UP = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN ? { url: process.env.UPSTASH_REDIS_REST_URL.replace(/\/$/, ''), tok: process.env.UPSTASH_REDIS_REST_TOKEN } : null;
-let DB = { top: {}, mayor: null, el: null, gov: null, biz: {}, auc: null, refunds: {}, sug: [], news: [], fin: {} };
+let DB = { homes: {}, top: {}, mayor: null, el: null, gov: null, biz: {}, auc: null, refunds: {}, sug: [], news: [], fin: {} };
 for (const f of [DATA, DATA + '.bak']) { try { DB = Object.assign(DB, JSON.parse(fs.readFileSync(f, 'utf8'))); break; } catch (e) { } }
 let dbDirty = false; const saveDb = () => { dbDirty = true; };
 async function upCmd(args) { const r = await fetch(UP.url, { method: 'POST', headers: { Authorization: 'Bearer ' + UP.tok, 'Content-Type': 'application/json' }, body: JSON.stringify(args) }); return (await r.json()).result; }
@@ -176,7 +180,7 @@ let cityD = false; const dirtyCity = () => { cityD = true; saveDb(); };
 
 // ---------- Negocios: un solo dueño por negocio. Kiosco y Cafetería para el primero que los compre; el resto, en subasta diaria ----------
 const BIZ = { kiosk: 150000, cafe: 800000, phones: 2500000, club: 15000000, bowling: 9000000, gym: 6000000, wash: 4500000, beach: 2000000 };
-const FIRST = new Set(['kiosk', 'cafe']), AUC_MS = 15 * 60e3, AUC_ADD = 60e3;
+const FIRST = new Set(['kiosk', 'cafe']), AUC_MS = 15 * 60e3, AUC_ADD = 60e3, AUC_GAP = 45 * 60e3;
 const bizMsg = () => ({ t: 'biz', own: DB.biz, auc: DB.auc && Object.assign({}, DB.auc, { left: DB.auc.ends - Date.now() }) });
 let bizD = false; const dirtyBiz = () => { bizD = true; saveDb(); };
 function bizBuy(me, m) {
@@ -204,7 +208,24 @@ function bid(me, m) {
   a.top = { id: me.id, n: me.state.name, c }; a.n++; a.ends += AUC_ADD; dirtyBiz();
   aucEv('bid', '💰 ' + me.state.name + ' puja ' + (c / 100).toLocaleString('es-ES') + ' € por ' + a.id + ' (+1 min)');
 }
-if (DB.auc === null || DB.auc === undefined) setTimeout(nextAuction, 1000);
+if ((DB.auc === null || DB.auc === undefined) && !DB.aucNextAt) DB.aucNextAt = Date.now() + 3 * 60e3;
+
+// ---------- Casas: cada casa tiene un solo dueño (compra o alquiler de 7 días) ----------
+const HOME_ID = /^h([1-9]|[1-9][0-9])$/, homesMsg = () => ({ t: 'homes', own: DB.homes || (DB.homes = {}) });
+function homeBuy(me, m) {
+  const id = String(m.id || ''); if (!HOME_ID.test(id)) return; const mode = m.m === 'rent' ? 'rent' : 'buy', cur = DB.homes[id], n = Date.now();
+  if (cur && cur.o !== me.id) return send(me.ws, { t: 'hno', id, why: 'Esa casa ya tiene dueño' });
+  if (cur && cur.m === 'buy') return send(me.ws, { t: 'hno', id, why: 'Esa casa ya es tuya' });
+  const until = mode === 'rent' ? Math.max(n, (cur && cur.until) || 0) + 7 * 864e5 : 0;
+  DB.homes[id] = { o: me.id, n: me.state.name, m: mode, until }; saveDb(); broadcast(homesMsg()); send(me.ws, { t: 'hok', id, m: mode, until });
+}
+function homeSell(me, m) { const id = String(m.id || ''), c = DB.homes[id]; if (c && c.o === me.id) { delete DB.homes[id]; saveDb(); broadcast(homesMsg()); } }
+function homeClaim(me, m) { // al conectar: casas que el jugador ya tenía antes de este sistema
+  const id = String(m.id || ''); if (!HOME_ID.test(id) || DB.homes[id]) return; const n = Date.now(), mode = m.m === 'rent' ? 'rent' : 'buy';
+  DB.homes[id] = { o: me.id, n: me.state.name, m: mode, until: mode === 'rent' ? Math.min(num(m.until, 1e15), n + 7 * 864e5) : 0 }; saveDb(); broadcast(homesMsg());
+}
+const homeFree = id => { if (id && DB.homes[id]) { delete DB.homes[id]; saveDb(); broadcast(homesMsg()); } };
+function homesTick(now) { let ch = false; for (const id in DB.homes) { const c = DB.homes[id]; if (c.m === 'rent' && c.until < now) { delete DB.homes[id]; ch = true; } } if (ch) { saveDb(); broadcast(homesMsg()); } }
 
 // ---------- Chat, privados y comandos ----------
 const ADMIN = process.env.ADMIN_PASS || ''; // la contraseña se pone en Render (Environment), nunca en el código
@@ -216,11 +237,31 @@ function chat(me, m) {
   if (m.to) { const p = players.get(String(m.to)); if (!p) return send(me.ws, { t: 'chat', sys: true, txt: 'Ese jugador no está conectado' }); const o = { t: 'chat', id: now.toString(36) + Math.random().toString(36).slice(2, 5), priv: true, pid: me.id, n: me.state.name, to: p.id, tn: p.state.name, txt, at: now }; send(p.ws, o); send(me.ws, o); for (const k of [me.id, p.id]) { const L = PRIVLOG[k] || (PRIVLOG[k] = []); L.push(o); if (L.length > 30) L.shift(); } return; }
   const o = { t: 'chat', id: now.toString(36) + Math.random().toString(36).slice(2, 5), pid: me.id, n: me.state.name, txt, at: now }; CHATLOG.push(o); if (CHATLOG.length > 40) CHATLOG.shift(); broadcast(o);
 }
+function admOff(me) {
+  if (!me.isAdm) return; me.isAdm = false; if (me.inv) { me.inv = false; me.dirty = true; broadcast(Object.assign({ t: 'state' }, me.state)); }
+  if (isDeal(me)) { CRM.deal = null; crSave(); } if (isCop(me)) { CRM.cop = null; crSave(); copId(); } delete CRM.lic[me.id]; crRoleMsg0(me);
+  send(me.ws, { t: 'adm', on: false });
+}
+function admAct(me, m) {
+  if (!me.isAdm) return; const n = Date.now();
+  if (m.a === 'inv') { me.inv = !!m.on; if (me.inv) broadcast({ t: 'leave', id: me.id }); else { me.dirty = true; broadcast(Object.assign({ t: 'state' }, me.state, { lk: me.lk })); } }
+  else if (m.a === 'dealer') { if (isCop(me)) { CRM.cop = null; copId(); } CRM.deal = { id: me.id, n: me.state.name, since: n, inv: { seeds: 0, plants: [], prod: 0, lamp: 1 }, house: null, sales: 0, msales: 0, changes: 0, first: 0, mask: false, last: 0, spots: {}, off: 0 }; crSave(); crRoleMsg0(me); }
+  else if (m.a === 'cop') { if (isDeal(me)) CRM.deal = null; CRM.cop = { id: me.id, n: me.state.name, at: n, paid: n, ev: [], off: 0 }; crSave(); copId(); crRoleMsg0(me); }
+  else if (m.a === 'lic') { CRM.lic[me.id] = n + 7200000; send(me.ws, { t: 'lic', until: CRM.lic[me.id] }); }
+  else if (m.a === 'goods' && isDeal(me)) { CRM.deal.inv.seeds += 50; CRM.deal.inv.prod += 100; CRM.deal.inv.lamp = 3; crDealMsg(me); }
+}
 function command(me, txt) {
   const [cmd, ...a] = txt.split(/\s+/), sys = t => send(me.ws, { t: 'chat', sys: true, txt: t });
-  if (cmd === '/help' || cmd === '/ayuda') return sys('Comandos: /online · /w NOMBRE mensaje (privado) · /givemoney NOMBRE CANTIDAD CONTRASEÑA · /ufo CONTRASEÑA · /ayuntamiento CONTRASEÑA (administración)');
+  if (cmd === '/help' || cmd === '/ayuda') return sys('Comandos: /online · /w NOMBRE mensaje (privado) · /givemoney NOMBRE CANTIDAD CONTRASEÑA · /ufo CONTRASEÑA · /ayuntamiento CONTRASEÑA · /admin CONTRASEÑA (administración)');
   if (cmd === '/online') return sys('Conectados (' + players.size + '): ' + [...players.values()].map(p => p.state.name).join(', '));
   if (cmd === '/w' || cmd === '/msg') { const p = byName(a[0]); if (!p) return sys('No hay nadie conectado con ese nombre'); return chat(me, { txt: a.slice(1).join(' '), to: p.id }); }
+  if (cmd === '/admin') {
+    if (a[0] === 'off') { admOff(me); return sys('Modo admin desactivado'); }
+    const now = Date.now(); me.adm = (me.adm || []).filter(t => now - t < 600000); if (me.adm.length >= 5) return sys('Demasiados intentos. Espera 10 minutos.');
+    if (!ADMIN) return sys('La administración no está activada en este servidor (falta ADMIN_PASS en Render)');
+    if (a[0] !== ADMIN) { me.adm.push(now); return sys('Contraseña incorrecta'); }
+    me.isAdm = true; send(me.ws, { t: 'adm', on: true }); console.log('admin on', me.state.name); return sys('Modo admin activado. Nada de lo que hagas se guarda; /admin off para salir.');
+  }
   if (cmd === '/givemoney' || cmd === '/ufo' || cmd === '/ayuntamiento') {
     const now = Date.now(); me.adm = (me.adm || []).filter(t => now - t < 600000); if (me.adm.length >= 5) return sys('Demasiados intentos. Espera 10 minutos.');
     const pass = a[a.length - 1];
@@ -321,7 +362,7 @@ function crDeal(me, m) {
   const D = CRM.deal; if (!D || D.id !== me.id || jailed(me.id)) return; const n = Date.now(), a = m.a, I = D.inv, slots = [0, 3, 6, 10][I.lamp];
   if (a === 'seed') I.seeds += Math.max(1, Math.min(10, Math.floor(num(m.n, 1e3))));
   else if (a === 'lamp') { if (I.lamp < 3) I.lamp++; }
-  else if (a === 'plant') { const h = String(m.house || ''); if (!/^h\d$/.test(h)) return sysTo(me, 'Solo puedes plantar dentro de tu casa'); const k = Math.min(Math.floor(num(m.n, 1e3)), I.seeds, slots - I.plants.length); if (k <= 0) return sysTo(me, 'No tienes semillas o espacio'); I.seeds -= k; for (let i = 0; i < k; i++) I.plants.push(n); D.house = h; }
+  else if (a === 'plant') { const h = String(m.house || ''); if (!/^h\d+$/.test(h) || (DB.homes[h] && DB.homes[h].o !== me.id)) return sysTo(me, 'Solo puedes plantar dentro de tu casa'); const k = Math.min(Math.floor(num(m.n, 1e3)), I.seeds, slots - I.plants.length); if (k <= 0) return sysTo(me, 'No tienes semillas o espacio'); I.seeds -= k; for (let i = 0; i < k; i++) I.plants.push(n); D.house = h; }
   else if (a === 'harvest') { let k = 0; I.plants = I.plants.filter(t => { if (n - t >= GROW) { k++; return false; } return true; }); I.prod += k * [0, 3, 4, 5][I.lamp]; if (!k) return sysTo(me, 'Todavía no hay plantas listas'); }
   else if (a === 'mask') D.mask = !!m.on;
   else if (a === 'sell') {
@@ -345,7 +386,7 @@ function crCop(me, m) {
   if (a === 'sync') return crCopMsg(me);
   if (a === 'ask') { const sp = SPOTS[m.s | 0]; if (!sp || Math.hypot(me.state.x - sp[0], me.state.z - sp[1]) > 9) return sysTo(me, 'Acércate al testigo'); if (n - (C.lq || 0) < (FAST ? 100 : 8000)) return sysTo(me, 'Dale un momento al testigo'); C.lq = n; C.known = C.known || []; const c = CRM.clues.find(x => x.spot === (m.s | 0) && n - x.t < 1800000 && !C.known.includes(x.id)); if (!c) return send(me.ws, { t: 'cev', txt: '🗣️ El testigo no ha visto nada raro por aquí (o ya te lo contó).' }); C.known.push(c.id); crCopMsg(me); return send(me.ws, { t: 'cev', txt: '🗣️ Testigo: «Vi a alguien sospechoso: ' + c.desc.toLowerCase() + '». Anotado en tu cuaderno.' }); }
   if (a === 'search') {
-    const sc = me.state.scene; if (!/^h\d$/.test(sc)) return sysTo(me, 'Tienes que estar dentro de una casa para registrarla'); if (n - (C.ls || 0) < (FAST ? 200 : 15000)) return sysTo(me, 'Espera 15 segundos entre registros'); C.ls = n; const D = CRM.deal;
+    const sc = me.state.scene; if (!/^h\d+$/.test(sc)) return sysTo(me, 'Tienes que estar dentro de una casa para registrarla'); if (n - (C.ls || 0) < (FAST ? 200 : 15000)) return sysTo(me, 'Espera 15 segundos entre registros'); C.ls = n; const D = CRM.deal;
     if (D && D.house === sc && D.inv.plants.length) { C.ev.push({ k: 'plantacion', pid: D.id, q: 6, at: n }); send(me.ws, { t: 'cev', txt: '🌿 ¡Plantación de marihuana encontrada! Propietario de la casa: ' + D.n + '. Prueba guardada en tu cuaderno.' }); return crCopMsg(me); }
     return send(me.ws, { t: 'cev', txt: 'Registras la casa: no encuentras nada sospechoso.' });
   }
@@ -358,7 +399,7 @@ function crCop(me, m) {
       const D = CRM.deal, pts = matchPts(T, C.ev);
       if (pts >= 5) {
         const mins = D.first ? Math.min(60, Math.floor((n - D.first) / 60000)) : 0, reward = 5000 + mins * 250 + Math.min(10, D.changes) * 1500 + Math.min(20, D.msales) * 300;
-        broadcast({ t: 'scare', x: T.state.x, z: T.state.z }); crJail(T, 300000, 'Detenido por tráfico de marihuana'); send(T.ws, { t: 'fine', c: 500000 }); send(T.ws, { t: 'bust', house: D.house }); CRM.dban[T.id] = n + 600000; CRM.deal = null; CRM.clues = []; C.ev = []; C.won = (C.won || 0) + 1;
+        const bh = D.house || Object.keys(DB.homes).find(i => DB.homes[i].o === T.id); homeFree(bh); broadcast({ t: 'scare', x: T.state.x, z: T.state.z }); crJail(T, 300000, 'Detenido por tráfico de marihuana'); send(T.ws, { t: 'fine', c: 500000 }); send(T.ws, { t: 'bust', house: bh }); CRM.dban[T.id] = n + 600000; CRM.deal = null; CRM.clues = []; C.ev = []; C.won = (C.won || 0) + 1;
         give(me, reward * 100, 'Recompensa por detener al distribuidor'); news('👮 ¡' + me.state.name + ' detiene a ' + T.state.name + ', el distribuidor de marihuana! Recompensa: ' + reward.toLocaleString('es-ES') + ' €', 'policia'); crSave(); return crCopMsg(me);
       }
       return crSanction(me, 'Detención sin pruebas válidas');
@@ -416,12 +457,13 @@ setInterval(() => {
   // sueldo del alcalde (sale del tesoro municipal), cada 10 minutos si está conectado
   const g = DB.gov; if (now - g.paidAt >= 600000) { g.paidAt = now; const mp = DB.mayor && players.get(DB.mayor.id), pay = Math.min(Math.round(g.salary / 6), Math.floor(g.treasury)); if (mp && pay > 0) { g.treasury -= pay; give(mp, pay, 'Sueldo de alcalde'); cityD = true; } }
   // subastas
-  if (DB.auc && now >= DB.auc.ends) { const a = DB.auc; if (a.top) { DB.biz[a.id] = { owner: a.top.id, n: a.top.n, since: now }; const t = (a.top.c / 100).toLocaleString('es-ES') + ' €'; news('🔨 ' + a.top.n + ' gana la subasta de ' + a.id + ' por ' + t, 'subasta'); aucEv('end', '🏆 ' + a.top.n + ' gana ' + a.id + ' por ' + t); const p = players.get(a.top.id); p && send(p.ws, { t: 'chat', sys: true, txt: '¡Has ganado la subasta! El negocio ya es tuyo.' }); } else { news('🔨 Subasta de ' + a.id + ' sin pujas: se adjudica al precio inicial al Ayuntamiento y vuelve a salir más adelante', 'subasta'); aucEv('end', '🔨 ' + a.id + ': sin pujas, adjudicado al precio inicial (' + (a.min / 100).toLocaleString('es-ES') + ' €) al Ayuntamiento'); } DB.auc = null; dirtyBiz(); setTimeout(nextAuction, 20000); }
-  else if (!DB.auc && Math.random() < .002) nextAuction();
+  if (DB.auc && now >= DB.auc.ends) { const a = DB.auc; if (a.top) { DB.biz[a.id] = { owner: a.top.id, n: a.top.n, since: now }; const t = (a.top.c / 100).toLocaleString('es-ES') + ' €'; news('🔨 ' + a.top.n + ' gana la subasta de ' + a.id + ' por ' + t, 'subasta'); aucEv('end', '🏆 ' + a.top.n + ' gana ' + a.id + ' por ' + t); const p = players.get(a.top.id); p && send(p.ws, { t: 'chat', sys: true, txt: '¡Has ganado la subasta! El negocio ya es tuyo.' }); } else { news('🔨 Subasta de ' + a.id + ' sin pujas: se adjudica al precio inicial al Ayuntamiento y vuelve a salir más adelante', 'subasta'); aucEv('end', '🔨 ' + a.id + ': sin pujas, adjudicado al precio inicial (' + (a.min / 100).toLocaleString('es-ES') + ' €) al Ayuntamiento'); } DB.auc = null; dirtyBiz(); DB.aucNextAt = now + AUC_GAP; }
+  else if (!DB.auc && now >= (DB.aucNextAt || 0)) nextAuction();
   if (now >= ufoNext && players.size) ufoStart();
   if (UFO && now - UFO.at > 100000) UFO = null;
   if (CAB && now >= CAB.end) cabEnd(CAB.vote ? null : '');
   if (cityD) { cityD = false; broadcast(cityMsg()); }
+  homesTick(now);
   if (bizD) { bizD = false; broadcast(bizMsg()); }
   if (topD && now - lastTop > 2000) { topD = false; lastTop = now; broadcast(topMsg()); }
 }, 1000);
@@ -502,14 +544,14 @@ setInterval(() => {
 }, 40);
 
 function full(p) { return Object.assign({}, p.state, { lk: p.lk }); }
-function sendSnap(ws) { try { ws.send(JSON.stringify({ t: 'snap', list: [...players.values()].map(full) })); } catch (e) { } }
+function sendSnap(ws) { try { ws.send(JSON.stringify({ t: 'snap', list: [...players.values()].filter(p => !p.inv).map(full) })); } catch (e) { } }
 function broadcast(obj) { const s = JSON.stringify(obj); for (const p of players.values()) if (p.ws.readyState === 1) p.ws.send(s); }
 function broadcastCount() { broadcast({ t: 'count', n: players.size }); }
 
 // 10 veces por segundo: un solo paquete con lo que ha cambiado
 setInterval(() => {
   const out = [];
-  for (const p of players.values()) if (p.dirty) { const o = Object.assign({ t: 'state' }, p.state); if (p.lkDirty) { o.lk = p.lk; p.lkDirty = false; } out.push(o); p.dirty = false; }
+  for (const p of players.values()) if (p.dirty && p.inv) p.dirty = false; else if (p.dirty) { const o = Object.assign({ t: 'state' }, p.state); if (p.lkDirty) { o.lk = p.lk; p.lkDirty = false; } out.push(o); p.dirty = false; }
   if (out.length) { const s = JSON.stringify(out); for (const p of players.values()) if (p.ws.readyState === 1) p.ws.send(s); }
 }, 100);
 // conexiones muertas

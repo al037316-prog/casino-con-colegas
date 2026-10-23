@@ -565,11 +565,11 @@ const Bus = {
 };
 
 /* ---------- Ajustes ---------- */
-const Settings = Object.assign({ quality: 'auto', sound: true, music: true, volume: 0.7, name: 'Jugador', fps: false, weather: true, view: 1, run: false, turbo: false }, Store.get('settings', {}));
+const Settings = Object.assign({ quality: 'auto', sound: true, music: true, volume: 0.7, name: 'Jugador', fps: false, weather: true, view: 1, run: false, turbo: false, notif: true }, Store.get('settings', {}));
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 /** Multiplicador de distancia de visión en exteriores (Ajustes) */
 const viewK = sc => (sc && (sc.ext || sc.outdoor)) ? [.75, 1.25, 1.9][Settings.view ?? 1] : 1;
-Settings.save = function () { const o = {}; for (const k of ['quality', 'sound', 'music', 'volume', 'name', 'fps', 'weather', 'view', 'run', 'turbo']) o[k] = this[k]; Store.set('settings', o); };
+Settings.save = function () { const o = {}; for (const k of ['quality', 'sound', 'music', 'volume', 'name', 'fps', 'weather', 'view', 'run', 'turbo', 'notif']) o[k] = this[k]; Store.set('settings', o); };
 /** Nivel de calidad efectivo: 0 bajo, 1 medio, 2 alto */
 function detectQuality() {
   if (Settings.quality === 'low') return 0;
@@ -992,6 +992,7 @@ const UI = {
       <div class="field"><span class="lbl">Distancia de visión</span><div class="seg" id="vwSeg"><button data-v="0">Cerca</button><button data-v="1">Normal</button><button data-v="2">Lejos</button></div>
         <small style="color:var(--muted)">«Lejos» deja ver toda la ciudad de punta a punta; «Cerca» va más fluido en ordenadores lentos.</small></div>
       <div class="field"><span class="lbl">Correr siempre (Shift para andar)</span><div class="seg" id="runSeg"><button data-r="1">Sí</button><button data-r="0">No</button></div></div>
+      <div class="field"><span class="lbl">Avisos de otros jugadores (premios, subastas, recordatorios)</span><div class="seg" id="ntSeg"><button data-n="1">Sí</button><button data-n="0">No</button></div></div>
       <div class="field"><span class="lbl">Mostrar FPS</span><div class="seg" id="fpsSeg"><button data-f="1">Sí</button><button data-f="0">No</button></div></div>
       <p style="font-size:14px;color:var(--muted)">Apostado: ${fmt(s.wagered)} · Ganado en premios: ${fmt(s.won)} · Sueldo en BURGER BOOM: ${fmt(s.earned)} · Mayor premio: ${fmt(s.best)}</p>
       <div class="acts"><button class="btn primary" id="mOk">Listo</button></div>`, c => {
@@ -999,6 +1000,7 @@ const UI = {
       segs('qSeg', 'q', Settings.quality, v => { Settings.quality = v; Settings.save(); Q = detectQuality(); World && World.applyQuality(); });
       segs('muSeg', 'm', Settings.music ? '1' : '0', v => { Settings.music = v === '1'; Settings.save(); Sfx.apply(); });
       segs('wxSeg', 'x', Settings.weather ? '1' : '0', v => { Settings.weather = v === '1'; Settings.save(); Env.reset(); });
+      segs('ntSeg', 'n', Settings.notif !== false ? '1' : '0', v => { Settings.notif = v === '1'; Settings.save(); });
       segs('fpsSeg', 'f', Settings.fps ? '1' : '0', v => { Settings.fps = v === '1'; Settings.save(); $('#fps').hidden = !Settings.fps; });
       $('#vol', c).oninput = e => { Settings.volume = +e.target.value; Settings.save(); Sfx.apply(); };
       const pn = $('#pname', c); pn.value = Settings.name; pn.oninput = () => { Settings.name = pn.value.trim().slice(0, 16) || 'Jugador'; Settings.save(); };
@@ -2087,7 +2089,7 @@ function buildCity() {
   const sc = {
     label: 'PLAZA DEL NEÓN', music: 'city', group: new THREE.Group(), colliders: [], circles: [], interact: [], anims: [], lights: [],
     cam: { pitch: .4, dist: 8.5, min: 4, max: 15 }, camCollide: true, fog: [0x1a1236, 40, 165],
-    bounds: { x0: -100, x1: 41, z0: -35, z1: 35 }, spawn: { x: 6, z: -9, yaw: 0 },
+    bounds: { x0: HOME_X0 + 1, x1: 41, z0: -35, z1: 35 }, spawn: { x: 6, z: -9, yaw: 0 },
   };
   const G = new Geo(), R = seeded(7);
   const gl1 = new Glows(1.1), gl3 = new Glows(3.4), gl8 = new Glows(9);
@@ -6175,7 +6177,7 @@ const Feed = {
     const mine = m.pid === Net.id;
     const it = { n: mine ? 'Tú' : m.n, g: m.g, k: m.k, c: m.c, mine };
     this.list.unshift(it); this.list = this.list.slice(0, 12); this.draw();
-    if (!mine && m.k === 'win' && m.c >= 5000 && !UI.panelId) UI.toast(m.n + ' ha ganado ' + fmt(m.c) + ' en ' + gameName(m.g), 'good');
+    if (!mine && Settings.notif !== false && m.k === 'win' && m.c >= 5000 && !UI.panelId) UI.toast(m.n + ' ha ganado ' + fmt(m.c) + ' en ' + gameName(m.g), 'good');
   },
   mount(card) {
     if (Net.mode !== 'online') return;
@@ -6215,17 +6217,37 @@ function makeTag() {
    Está al oeste de la Plaza del Neón, a los dos lados de la calle principal.
    Cada casa es un interior real del mundo abierto: se entra caminando por la puerta.
    ===================================================================== */
-const HOMES = [
-  { id: 'h1', n: 'Estudio Neón', x: -54, s: -1, price: 250000, rent: 20000, col: '#c8b8a0', roof: '#5a3a3a', H: 4.6 },
-  { id: 'h2', n: 'Piso Jardín', x: -67, s: -1, price: 1200000, rent: 80000, col: '#a8c0c8', roof: '#3a4a5a', H: 5.2 },
-  { id: 'h3', n: 'Casa Adosada', x: -80, s: -1, price: 3500000, rent: 200000, col: '#e0c8a8', roof: '#6a3a2a', H: 6.4, two: true },
-  { id: 'h4', n: 'Casa del Parque', x: -93, s: -1, price: 8000000, rent: 450000, col: '#d8d0e8', roof: '#3a2a4a', H: 6.6, two: true },
-  { id: 'h5', n: 'Loft Industrial', x: -54, s: 1, price: 2000000, rent: 120000, col: '#6a5a5a', roof: '#2a2a2a', H: 5.6 },
-  { id: 'h6', n: 'Chalet Moderno', x: -67, s: 1, price: 15000000, rent: 800000, col: '#f0f0f0', roof: '#2a2a30', H: 6.6, two: true },
-  { id: 'h7', n: 'Villa Royale', x: -80, s: 1, price: 40000000, rent: 2000000, col: '#f4e8c8', roof: '#8a6a2a', H: 7, two: true, gold: true },
-  { id: 'h8', n: 'Mansión Neón', x: -93, s: 1, price: 120000000, rent: 6000000, col: '#1e1c2c', roof: '#141220', H: 7.4, two: true, neon: '#ff3d9a' },
+
+/* Tipos de casa: cada uno es más grande y mejor que el anterior. Hay varias casas iguales de cada tipo
+   y cada casa tiene UN solo dueño (lo controla el servidor). Los tipos con piscina tienen piscina interior. */
+const HTIERS = [
+  { k: 'estudio', pl: 'ESTUDIOS NEÓN', n: 'Estudio Neón', c: 8, hx: 4.8, hz: 4.8, H: 4.6, price: 250000, rent: 20000, col: '#c8b8a0', roof: '#5a3a3a', pool: 0 },
+  { k: 'piso', pl: 'PISOS JARDÍN', n: 'Piso Jardín', c: 6, hx: 5.4, hz: 5.6, H: 5.2, price: 1200000, rent: 80000, col: '#a8c0c8', roof: '#3a4a5a', pool: 0 },
+  { k: 'loft', pl: 'LOFTS INDUSTRIALES', n: 'Loft Industrial', c: 5, hx: 6.2, hz: 6.6, H: 5.6, price: 2000000, rent: 120000, col: '#6a5a5a', roof: '#2a2a2a', pool: 0 },
+  { k: 'adosada', pl: 'CASAS ADOSADAS', n: 'Casa Adosada', c: 4, hx: 6.8, hz: 7.6, H: 6.4, price: 3500000, rent: 200000, col: '#e0c8a8', roof: '#6a3a2a', two: true, pool: 0 },
+  { k: 'parque', pl: 'CASAS DEL PARQUE', n: 'Casa del Parque', c: 4, hx: 7.5, hz: 9.4, H: 6.6, price: 8000000, rent: 450000, col: '#d8d0e8', roof: '#3a2a4a', two: true, pool: 2.8 },
+  { k: 'chalet', pl: 'CHALETS MODERNOS', n: 'Chalet Moderno', c: 3, hx: 8.4, hz: 10.6, H: 6.6, price: 15000000, rent: 800000, col: '#f0f0f0', roof: '#2a2a30', two: true, pool: 4 },
+  { k: 'villa', pl: 'VILLAS ROYALE', n: 'Villa Royale', c: 2, hx: 9.4, hz: 11.8, H: 7, price: 40000000, rent: 2000000, col: '#f4e8c8', roof: '#8a6a2a', two: true, gold: true, pool: 4.6 },
+  { k: 'mansion', pl: 'MANSIONES NEÓN', n: 'Mansión Neón', c: 2, hx: 10.6, hz: 12.2, H: 7.4, price: 120000000, rent: 6000000, col: '#1e1c2c', roof: '#141220', two: true, neon: '#ff3d9a', pool: 5 },
 ];
-HOMES.forEach(h => { h.cz = h.s * 16; h.fz = h.cz - h.s * 5.2; });
+const HOMES = [], HOME_FILL = []; let HOME_X0 = -100;
+{
+  const cur = { '-1': -88, '1': -54 }; let side = -1, n = 0;
+  HOME_FILL.push({ s: -1, a: -88, b: -67.2 }, { s: -1, a: -56.8, b: -47 }, { s: 1, a: -54, b: -47 });
+  HTIERS.forEach((T, ti) => {
+    const w = 2 * T.hx + .8 + 3.2; T.sx = Math.min(cur['-1'], cur['1']);
+    for (let i = 0; i < T.c; i++) {
+      const s = side; side = -side; n++;
+      HOMES.push(Object.assign({}, T, { id: 'h' + n, n: T.n + (T.c > 1 ? ' ' + (i + 1) : ''), s, x: cur[s] - w / 2, cz: s * (10.8 + T.hz), fz: s * 10.8, tier: ti, idx: i }));
+      cur[s] -= w;
+    }
+    const m = Math.min(cur['-1'], cur['1']);
+    for (const s of [-1, 1]) HOME_FILL.push({ s, a: m - 6, b: cur[s] });
+    cur['-1'] = cur['1'] = m - 6;
+  });
+  HOME_X0 = Math.min(cur['-1'], cur['1']) - 10;
+}
+const LEGACY_HOMES = (() => { const f = k => HOMES.find(h => h.k === k).id; return { h1: f('estudio'), h2: f('piso'), h3: f('adosada'), h4: f('parque'), h5: f('loft'), h6: f('chalet'), h7: f('villa'), h8: f('mansion') }; })();
 const RENT_DAYS = 7, DAY_MS = 864e5;
 
 /* Muebles: coordenadas locales de la casa con la puerta hacia +z */
@@ -6248,43 +6270,108 @@ const FURN = [
 ];
 
 const Homes = {
-  st() { const s = Prog.s; if (!s.homes) s.homes = {}; return s.homes; },
+  srv: {}, pend: {}, synced: false, sig: {},
+  st() { const s = Prog.s; if (!s.homes) s.homes = {}; if (!s.homesV) { s.homesV = 2; const o = {}; for (const k in s.homes) o[LEGACY_HOMES[k] || k] = s.homes[k]; s.homes = o; } return s.homes; },
   rec(id) { return this.st()[id] || null; },
+  online() { return typeof Net !== 'undefined' && Net.mode === 'online'; },
+  /** dueño según el servidor (null = libre) */
+  ownerOf(id) { return this.srv[id] || null; },
+  takenByOther(id) { const o = this.srv[id]; return !!o && o.o !== Net.id; },
   /** ¿Puedes entrar? (comprada, alquilada en vigor o visita en curso) */
-  access(id) { const r = this.rec(id); if (r && (r.m === 'buy' || (r.m === 'rent' && r.until > Date.now()))) return true; return (this.visit && this.visit.id === id && this.visit.until > performance.now()); },
-  owned(id) { const r = this.rec(id); return !!(r && r.m === 'buy'); },
+  access(id) { const r = this.rec(id); if (r && !this.takenByOther(id) && (r.m === 'buy' || (r.m === 'rent' && r.until > Date.now()))) return true; return (this.visit && this.visit.id === id && this.visit.until > performance.now()); },
+  owned(id) { const r = this.rec(id); return !!(r && r.m === 'buy' && !this.takenByOther(id)); },
   furnVal(r) { let v = 0; for (const k in (r && r.furn) || {}) { const f = FURN.find(x => x.id === k); if (f) v += f.p; } return v; },
   /** Patrimonio: casas compradas y muebles (para el estatus de riqueza) */
   assets() { let v = 0; for (const h of HOMES) { const r = this.rec(h.id); if (!r) continue; if (r.m === 'buy') v += h.price; v += this.furnVal(r); } return v; },
   count() { return HOMES.filter(h => this.owned(h.id)).length; },
   furnCount() { let n = 0; for (const h of HOMES) n += Object.keys((this.rec(h.id) || {}).furn || {}).length; return n; },
 
+  /** Mensajes del servidor: reparto de casas (una casa = un dueño) */
+  onMsg(m) {
+    if (m.t === 'homes') {
+      this.srv = m.own || {};
+      if (!this.synced) {
+        this.synced = true; // primera vez al conectar: reclamar las que ya tenías y soltar las que ya son de otro
+        for (const h of HOMES) { const r = this.rec(h.id); if (!r) continue; const o = this.srv[h.id]; if (o && o.o !== Net.id) this.lose(h); else if (!o && (r.m === 'buy' || r.until > Date.now())) Net.transport.send({ t: 'hclaim', id: h.id, m: r.m, until: r.until || 0 }); }
+      } else for (const h of HOMES) { const r = this.rec(h.id); if (r && this.srv[h.id] && this.srv[h.id].o !== Net.id) this.lose(h); }
+      this.redraw(); return true;
+    }
+    if (m.t === 'hok') { const h = HOMES.find(x => x.id === m.id), p = this.pend[m.id]; if (!h || !p) return true; delete this.pend[m.id]; this.apply(h, p.m, m.until); return true; }
+    if (m.t === 'hno') { const p = this.pend[m.id]; if (p) { delete this.pend[m.id]; Wallet.grant(p.cost, 'Devolución'); } UI.toast(m.why || 'No se pudo', 'bad'); return true; }
+    return false;
+  },
+  /** la casa ya no es tuya (la tiene otro jugador): se devuelve el dinero */
+  lose(h) { const r = this.rec(h.id); if (!r) return; delete this.st()[h.id]; if (r.m === 'buy') Wallet.grant(h.price, 'Devolución de ' + h.n); Prog.save(); this.drawSign(h); this.furnish(h); UI.toast('🏠 ' + h.n + ' ya tiene otro dueño. Te devolvemos el dinero.', ''); },
+  redraw() { for (const h of HOMES) { const o = this.srv[h.id], sg = o ? o.o + o.n : ''; if (this.sig[h.id] !== sg) { this.sig[h.id] = sg; this.drawSign(h); } } },
+  apply(h, m, until) {
+    const o = this.st()[h.id] || { furn: {} }; o.m = m;
+    if (m === 'buy') o.until = 0; else o.until = until || (Math.max(Date.now(), o.until || 0) + RENT_DAYS * DAY_MS);
+    this.st()[h.id] = o; this.changed(h); UI.closeModal();
+    if (m === 'buy') { UI.toast('¡Enhorabuena! ' + h.n + ' ya es tuya', 'good'); Sfx.play('win'); } else { UI.toast('Alquilada hasta el ' + new Date(o.until).toLocaleDateString('es-ES'), 'good'); Sfx.play('chip'); }
+  },
+  /** comprar o alquilar: el servidor decide (si ya tiene dueño, te devuelve el dinero) */
+  buy(h, m) {
+    const cost = m === 'buy' ? h.price : h.rent;
+    if (this.pend[h.id]) return;
+    if (this.takenByOther(h.id)) { UI.toast('Esta casa ya tiene dueño', 'bad'); return; }
+    if (!Wallet.spend(cost, m === 'buy' ? h.n : h.n + ' (alquiler)')) return;
+    if (!this.online()) { this.apply(h, m); return; }
+    this.pend[h.id] = { m, cost }; Net.transport.send({ t: 'hbuy', id: h.id, m });
+    setTimeout(() => { const p = this.pend[h.id]; if (p) { delete this.pend[h.id]; Wallet.grant(p.cost, 'Devolución (sin respuesta del servidor)'); UI.toast('El servidor no ha respondido: te devolvemos el dinero', 'bad'); } }, 8000);
+  },
+
   /** Pasos de carga: un interior por casa */
   steps() {
     return HOMES.map(h => {
-      World.defPlace(h.id, { off: [h.x, 0, h.cz], zone: [h.x - 5.2, h.x + 5.2, h.cz - 5.2, h.cz + 5.2] });
+      World.defPlace(h.id, { off: [h.x, 0, h.cz], zone: [h.x - h.hx - .4, h.x + h.hx + .4, h.cz - h.hz - .4, h.cz + h.hz + .4] });
       return [h.id, () => this.buildInterior(h)];
     });
   },
   buildInterior(h) {
-    const rot = h.s > 0, wall = h.neon ? { base: '#1e1c2c', top: '#2a2840', dado: '#14121e', gold: '#ff3d9a', neon: h.neon } : h.gold ? { base: '#f4ecd8', top: '#c8b88a', dado: '#e0d0a8', gold: '#c89a3a', neon: '#ffe8a0' } : { base: '#efe6d8', top: '#c8b89a', dado: '#c9a77a', gold: '#a07a4a', neon: '#ffd9a0' };
+    const rot = h.s > 0, hx = h.hx, hz = h.hz, HH = Math.min(6.4, 4.7 + h.tier * .22), big = h.tier >= 3;
+    const wall = h.neon ? { base: '#1e1c2c', top: '#2a2840', dado: '#14121e', gold: '#ff3d9a', neon: h.neon } : h.gold ? { base: '#f4ecd8', top: '#c8b88a', dado: '#e0d0a8', gold: '#c89a3a', neon: '#ffe8a0' } : { base: '#efe6d8', top: '#c8b89a', dado: '#c9a77a', gold: '#a07a4a', neon: '#ffd9a0' };
+    const tr = (x, z) => rot ? [-x, -z] : [x, z];
     const sc = buildFloor({
-      id: h.id, label: h.n.toUpperCase(), music: 'premier', ox: 0, oz: 0, hx: 4.8, hz: 4.8, h: 4.7, fog: [0x1a1420, 30, 80], amb: [[.6, .56, .52], [.34, .3, .28], [.1, .1, .1]],
+      id: h.id, label: h.n.toUpperCase(), music: 'premier', ox: 0, oz: 0, hx, hz, h: HH, fog: [0x1a1420, 30, 90], amb: [[.6, .56, .52], [.34, .3, .28], [.1, .1, .1]],
       doorS: rot ? 0 : .9, doorN: rot ? .9 : 0,
       carpet: { base: h.neon ? '#2a2236' : '#9a7048', line: h.neon ? 'rgba(255,61,154,.25)' : 'rgba(60,40,20,.3)', dot: 'rgba(255,230,190,.07)' }, wall,
-      lights: lt => { lt(0, 3.6, 0, '#ffe8c8', 9, 1.25); lt(-2.8, 3, -2.6, '#ffdcb0', 6, .8); lt(2.8, 3, 2.6, '#ffdcb0', 6, .8); if (h.neon) lt(0, 2, 0, h.neon, 7, .7); },
+      lights: lt => {
+        lt(0, HH - 1.1, 0, '#ffe8c8', 9, 1.25); lt(-2.8, 3, -2.6, '#ffdcb0', 6, .8); lt(2.8, 3, 2.6, '#ffdcb0', 6, .8); if (h.neon) lt(0, 2, 0, h.neon, 7, .7);
+        if (hz > 5.8 || hx > 5.8) for (const [x, z] of [[-hx * .6, -hz * .6], [hx * .6, -hz * .6], [-hx * .6, hz * .6], [hx * .6, hz * .6]]) { const [a, b] = tr(x, z); lt(a, HH - 1.2, b, '#ffe2bc', 9, .9); }
+        if (h.pool) { const [a, b] = tr(0, -hz + 1 + h.pool / 2); lt(a, 1.2, b, '#3ff2ff', 10, 1.1); }
+      },
     }, k => {
-      const { sc } = k;
-      sc.cam = { pitch: .82, dist: 9.5, min: 5, max: 13 };
+      const { sc, G } = k;
+      sc.cam = { pitch: .82, dist: 9.5 + Math.min(4, h.tier * .6), min: 5, max: 13 + Math.min(5, h.tier * .8) };
       // la puerta da a la calle: se sale caminando por ella
-      if (rot) { sc.colliders.push({ x0: -5.4, x1: -.9, z0: -7, z1: -4.6 }, { x0: .9, x1: 5.4, z0: -7, z1: -4.6 }); sc.bounds.z0 = -6.8; }
-      else { sc.colliders.push({ x0: -5.4, x1: -.9, z0: 4.6, z1: 7 }, { x0: .9, x1: 5.4, z0: 4.6, z1: 7 }); sc.bounds.z1 = 6.8; }
-      const [tx, tz] = rot ? [-2.2, -4.2] : [2.2, 4.2];
-      k.G.box(tx - .3, 1.2, tz + (rot ? -.32 : .22), tx + .3, 1.7, tz + (rot ? -.22 : .32), '#111', {}); k.gl3.add(tx, 1.45, tz, '#3ff2ff', .35);
-      { const [cx, cz] = rot ? [4, 0] : [-4, 0]; k.G.box(cx - .35, 0, cz - .9, cx + .35, 2.1, cz + .9, '#3a2a20', {}); k.gl3.add(cx + (rot ? -.4 : .4), 1.2, cz, '#b45cff', .3);
+      const W = hx + .6, DZ = hz - .2;
+      if (rot) { sc.colliders.push({ x0: -W, x1: -.9, z0: -hz - 2.2, z1: -DZ }, { x0: .9, x1: W, z0: -hz - 2.2, z1: -DZ }); sc.bounds.z0 = -hz - 2; }
+      else { sc.colliders.push({ x0: -W, x1: -.9, z0: DZ, z1: hz + 2.2 }, { x0: .9, x1: W, z0: DZ, z1: hz + 2.2 }); sc.bounds.z1 = hz + 2; }
+      const [tx, tz] = tr(2.2, hz - .6);
+      G.box(tx - .3, 1.2, tz + (rot ? -.32 : .22), tx + .3, 1.7, tz + (rot ? -.22 : .32), '#111', {}); k.gl3.add(tx, 1.45, tz, '#3ff2ff', .35);
+      { const [cx, cz] = rot ? [4, 0] : [-4, 0]; G.box(cx - .35, 0, cz - .9, cx + .35, 2.1, cz + .9, '#3a2a20', {}); k.gl3.add(cx + (rot ? -.4 : .4), 1.2, cz, '#b45cff', .3);
         sc.colliders.push({ x0: cx - .4, x1: cx + .4, z0: cz - 1, z1: cz + 1, h: 2.1 });
         sc.interact.push({ x: cx + (rot ? -1.1 : 1.1), z: cz, r: 1.4, get label() { return CR.role === 'dealer' ? 'Armario de cultivo' : CR.role === 'cop' ? 'Registrar la casa' : 'Armario'; }, get sub() { return CR.role === 'dealer' ? 'Plantar, cosechar y guardar' : CR.role === 'cop' ? 'Buscar pruebas (hay 15 s entre registros)' : 'Cambiarte de ropa'; }, fn: () => { if (CR.role === 'dealer') Dealer.modal(); else if (CR.role === 'cop') Cop.act('search'); else Style.wardrobe(); } }); }
       sc.interact.push({ x: tx, z: tz + (rot ? .6 : -.6), r: 1.5, label: 'Tablet de la casa', sub: 'Muebles, alquiler y venta', fn: () => this.tablet(h) });
+      // ---- decoración propia de cada tipo (no se compra): alfombra, plantas, salón, columnas y piscina ----
+      const bx = (a0, c0, a1, c1, y1, col, o, solid, y0 = 0) => { const [p, q] = tr(a0, c0), [r, t] = tr(a1, c1), X0 = Math.min(p, r), X1 = Math.max(p, r), Z0 = Math.min(q, t), Z1 = Math.max(q, t); G.box(X0, y0, Z0, X1, y1, Z1, col, o || {}); if (solid) sc.colliders.push({ x0: X0, x1: X1, z0: Z0, z1: Z1, h: y1 }); };
+      const fl = (a0, c0, a1, c1, y, col) => { const [p, q] = tr(a0, c0), [r, t] = tr(a1, c1); G.floor(Math.min(p, r), Math.min(q, t), Math.max(p, r), Math.max(q, t), y, col, true); };
+      const plant = (x, z) => { const [a, b] = tr(x, z); G.cyl(a, 0, b, .3, .5, 8, '#8a5a34'); G.cyl(a, .5, b, .45, 1.2, 7, '#2f7a3a', { r2: .15 }); sc.circles.push({ x: a, z: b, r: .4 }); };
+      if (hz > 6) { fl(-1.3, 4.9, 1.3, hz - .9, .03, h.neon ? '#3a1a4a' : '#7a2a3a'); fl(-1.1, 5.0, 1.1, hz - 1, .035, h.neon ? '#ff3d9a' : '#c89a3a'); fl(-.95, 5.1, .95, hz - 1.1, .04, h.neon ? '#3a1a4a' : '#7a2a3a'); }
+      plant(-(hx - .7), hz - .8); plant(hx - .7, hz - .8);
+      if (hx > 6) { plant(-(hx - .7), -(hz - .8)); plant(hx - .7, -(hz - .8)); }
+      if (h.tier >= 2) for (const sx of [-1, 1]) { const x = sx * (hx - .5); bx(x - .35, -1.2, x + .35, 1.2, .8, h.neon ? '#3a2a5a' : '#6a4a3a', { top: h.neon ? '#ff3d9a' : '#8a6a4a' }, true); }
+      if (h.tier >= 4) for (const sx of [-1, 1]) { bx(sx * (hx - 2.0) - .5, -3.4, sx * (hx - 2.0) + .5, 3.4, .75, '#5a3a5a', { top: '#7a4a7a' }, true); bx(sx * (hx - 1.0) - .25, -3.4, sx * (hx - 1.0) + .25, 3.4, 1.4, '#5a3a5a', {}, false); }
+      if (h.tier >= 5) for (const sx of [-1, 1]) for (const z of [hz - 3.2, -hz + 2.4]) { const [a, b] = tr(sx * (hx - 1.3), z); G.cyl(a, 0, b, .3, HH - .15, 10, h.gold ? '#f4ecd8' : h.neon ? '#2a2040' : '#e8e4dc'); sc.circles.push({ x: a, z: b, r: .4 }); }
+      if (h.pool) {
+        const pd = h.pool, px = hx - 1.6, pz0 = -hz + 1, pz1 = pz0 + pd;
+        bx(-px - .35, pz0 - .35, px + .35, pz1 + .35, .5, '#e8e4dc', { top: '#f4f0e8' }, true);
+        fl(-px, pz0, px, pz1, .52, '#2ab6f0'); fl(-px + .4, pz0 + .4, px - .4, pz1 - .4, .53, '#58d0ff');
+        for (let i = 0; i < 6; i++) { const [a, b] = tr(-px + (i + .5) * (2 * px) / 6, (pz0 + pz1) / 2); k.gl3.add(a, .9, b, '#3ff2ff', .5); }
+        bx(-px - 1, pz1 + .6, -px + .4, pz1 + 1.2, .35, '#fff', {}, false); bx(px - .4, pz1 + .6, px + 1, pz1 + 1.2, .35, '#fff', {}, false);
+        const [ix, iz] = tr(0, pz1 + 1.1);
+        sc.interact.push({ x: ix, z: iz, r: 2.4, label: 'Piscina', sub: 'Darte un chapuzón', fn: () => { Sfx.play('pour'); FX.float && FX.float(null, '💦 ¡Chapuzón!', '#3ff2ff', 30); UI.toast('Te refrescas en la piscina de ' + h.n, 'good'); } });
+      }
     });
     sc.home = h; this.scenes = this.scenes || {}; this.scenes[h.id] = sc;
     this.furnish(h, sc);
@@ -6310,72 +6397,97 @@ const Homes = {
     });
     Bake.lights = sv;
   },
-  /** Fachadas, jardines y carteles en la calle (se llama al construir la ciudad) */
+  /** Fachadas, jardines, calle y carteles (se llama al construir la ciudad) */
   exterior(sc) {
     this.signs = {};
-    buildFloor({ extend: sc, ox: 0, oz: 0, amb: [Bake.sky, Bake.gnd, Bake.dirC], lights: lt => { for (const h of HOMES) lt(h.x, 3, h.fz - h.s * 1.2, h.neon || '#ffd9a0', 6, .8); } }, k => {
-      const G = k.G;
+    const LX = []; for (let x = -52; x > HOME_X0 + 4; x -= 24) LX.push(x);
+    buildFloor({ extend: sc, ox: 0, oz: 0, amb: [Bake.sky, Bake.gnd, Bake.dirC], lights: lt => { for (const h of HOMES) lt(h.x, 3, h.fz - h.s * 1.2, h.neon || '#ffd9a0', 6, .8); for (const x of LX) for (const z of [-5.6, 5.6]) lt(x, 5.2, z, '#ffb870', 11, 1); } }, k => {
+      const G = k.G, C = k.sc.colliders, CI = k.sc.circles;
+      // ---- calle y suelo del barrio (hacia el oeste) ----
+      G.floor(HOME_X0 - 4, -37, -95.5, 37, .006, '#3a3546', true);
+      G.floor(HOME_X0 - 4, -5.1, -95.5, 5.1, .012, '#25222f', true);
+      for (const z of [-5.6, 5.6]) G.floor(HOME_X0 - 4, z - .55, -95.5, z + .55, .014, '#5c5568', true);
+      for (let x = -97; x > HOME_X0; x -= 6) G.floor(x - 3, -.07, x, .07, .016, '#e8e8e8', false);
+      for (const x of LX) for (const z of [-5.6, 5.6]) { G.cyl(x, 0, z, .1, 5.2, 6, '#2a2a34'); G.box(x - .25, 5, z - .2, x + .25, 5.2, z + .2, '#2a2a34'); k.gl3.add(x, 4.95, z, '#ffc880', .8); CI.push({ x, z, r: .2 }); }
+      const tree = (x, z, s = 1) => { G.cyl(x, 0, z, .14 * s, 2.4 * s, 6, '#4a3020'); G.cyl(x, 2.1 * s, z, 1.3 * s, 1.3 * s, 7, '#1f5a34', { r2: 1 * s, topColor: '#2a7040' }); G.cyl(x, 3.3 * s, z, 1 * s, 1.1 * s, 7, '#247040', { r2: .2 * s }); CI.push({ x, z, r: .4 }); };
+      for (const T of HTIERS) { k.sign(T.pl + ' · desde ' + fmt(T.price), T.neon || (T.gold ? '#ffcf5a' : '#ffd9a0'), 7.6, [T.sx - 4, 3.4, -6.25], 0); G.box(T.sx - 4.1, 0, -6.35, T.sx - 3.9, 2.9, -6.15, '#2a2a33'); }
       for (const h of HOMES) {
-        const { x: cx, cz, fz, s, H } = h, x0 = cx - 5.2, x1 = cx + 5.2, z0 = cz - 5.2, z1 = cz + 5.2, front = s < 0 ? 's' : 'n', back = s < 0 ? 'n' : 's';
-        const gz0 = Math.min(fz, s * 6.2), gz1 = Math.max(fz, s * 6.2), fence = s * 6.2;
+        const { x: cx, cz, fz, s, H } = h, hxo = h.hx + .4, x0 = cx - hxo, x1 = cx + hxo, z0 = cz - h.hz - .4, z1 = cz + h.hz + .4, front = s < 0 ? 's' : 'n', back = s < 0 ? 'n' : 's';
+        const gz0 = Math.min(fz, s * 6.2), gz1 = Math.max(fz, s * 6.2), fence = s * 6.2, out = -s;
         // casa: paredes con hueco de puerta
         G.box(x0, 0, z0, cx - .9, H, z1, h.col, { top: h.roof }); G.box(cx + .9, 0, z0, x1, H, z1, h.col, { top: h.roof });
         if (s < 0) G.box(cx - .9, 0, z0, cx + .9, H, z1 - .4, h.col, { top: h.roof }); else G.box(cx - .9, 0, z0 + .4, cx + .9, H, z1, h.col, { top: h.roof });
         G.box(cx - .9, 3.2, s < 0 ? z1 - .4 : z0, cx + .9, H, s < 0 ? z1 : z0 + .4, h.col);
-        G.box(x0 - .35, H, z0 - .35, x1 + .35, H + .3, z1 + .35, h.roof); G.box(x0 + 1, H + .3, z0 + 1, x1 - 1, H + 1.1, z1 - 1, h.roof, { top: h.neon ? '#2a2840' : h.roof });
+        // zócalo y cornisa
+        G.box(x0 - .1, 0, Math.min(fz, fz + out * .15), x1 + .1, .5, Math.max(fz, fz + out * .15), '#4a4452');
+        // tejado escalonado
+        G.box(x0 - .4, H, z0 - .4, x1 + .4, H + .3, z1 + .4, h.roof);
+        { const lim = Math.min(hxo, h.hz + .4) - .9, n = h.tier >= 3 ? 4 : 3, st = (lim - 1) / n; for (let i = 0; i < n; i++) { const ins = 1 + i * st; G.box(x0 + ins, H + .3 + i * .5, z0 + ins, x1 - ins, H + .8 + i * .5, z1 - ins, h.roof, { top: h.neon ? '#2a2840' : h.gold ? '#a07a2a' : h.roof }); } }
+        G.box(x0 + 1.2, H + .3, z0 + 1.2, x0 + 1.9, H + 2.2, z0 + 1.9, '#6a4a3a');
         // marco de la puerta y luz del porche
         for (const dx of [-1.05, .9]) G.box(cx + dx, 0, fz - .1, cx + dx + .15, 3.3, fz + .1, h.gold ? '#c89a3a' : '#3a2a20');
         G.floor(cx - .9, s < 0 ? fz - .4 : fz, cx + .9, s < 0 ? fz : fz + .4, .02, '#1a1418', false);
-        k.gl3.add(cx, 3.5, fz - s * .2, h.neon || '#ffd9a0', .6);
+        k.gl3.add(cx, 3.5, fz + out * .2, h.neon || '#ffd9a0', .6);
+        // marquesina de la entrada
+        G.box(cx - 1.6, 3.3, Math.min(fz, fz + out * 1.1), cx + 1.6, 3.5, Math.max(fz, fz + out * 1.1), h.gold ? '#c89a3a' : h.roof);
         // ventanas
         const win = (face, at, a0, a1, y0) => { for (let a = a0; a + 1.3 <= a1; a += 2.3) G.rect(face, at, a, a + 1.3, y0, y0 + 1.4, h.neon ? '#ff6ac0' : '#ffd89a', false, .03); };
         win(front, fz, x0 + .8, cx - 1.6, 1.2); win(front, fz, cx + 1.6, x1 - .4, 1.2); if (h.two) win(front, fz, x0 + .8, x1 - .4, 4.2);
         win('e', x1, z0 + 1, z1 - 1, 1.4); win('w', x0, z0 + 1, z1 - 1, 1.4); win(back, s < 0 ? z0 : z1, x0 + 1, x1 - 1, 1.4);
-        if (h.neon) { for (let x = x0; x <= x1; x += .8) k.gl1.add(x, H + .2, fz - s * .38, h.neon, .45); }
-        if (h.gold) for (const dx of [-2.2, 2.2]) { G.cyl(cx + dx, 0, fz - s * .6, .22, H - .1, 10, '#f4ecd8'); k.sc.circles.push({ x: cx + dx, z: fz - s * .6, r: .3 }); }
+        if (h.two) { const bz0 = Math.min(fz, fz + out * 1.0), bz1 = Math.max(fz, fz + out * 1.0); G.box(cx - 2.6, 3.7, bz0, cx + 2.6, 3.85, bz1, '#e8e4dc'); const ry = fz + out * .95; G.box(cx - 2.6, 3.85, ry - .04, cx + 2.6, 4.7, ry + .04, '#cfd8e0'); }
+        if (h.neon) { for (let x = x0; x <= x1; x += .8) k.gl1.add(x, H + .2, fz + out * .38, h.neon, .45); }
+        if (h.gold || h.tier >= 5) for (const dx of [-2.2, 2.2]) { G.cyl(cx + dx, 0, fz + out * .6, .22, H - .1, 10, h.gold ? '#f4ecd8' : '#e8e4dc'); CI.push({ x: cx + dx, z: fz + out * .6, r: .3 }); }
         // jardín, camino, valla y buzón
         G.floor(x0, gz0, x1, gz1, .015, '#2f6a3a', true); G.floor(cx - .8, gz0, cx + .8, gz1, .025, '#b8ae9c', true);
-        for (const [a, b] of [[x0, cx - .9], [cx + .9, x1]]) { G.box(a, 0, fence - .08, b, .7, fence + .08, '#e8e4dc'); k.sc.colliders.push({ x0: a, x1: b, z0: fence - .15, z1: fence + .15, h: .7 }); }
-        for (const xx of [x0 - .3, x1]) { G.box(xx, 0, gz0, xx + .3, 1, gz1, '#2a6a3a', { top: '#348048' }); k.sc.colliders.push({ x0: xx, x1: xx + .3, z0: gz0, z1: gz1, h: 1 }); }
-        G.cyl(cx - 3.4, 0, (fz + fence) / 2, .5, 1.1, 7, '#2a7a3a', { r2: .2 }); k.sc.circles.push({ x: cx - 3.4, z: (fz + fence) / 2, r: .55 });
-        G.box(cx + 1.3, 0, fence - s * .3 - .1, cx + 1.45, 1, fence - s * .3 + .1, '#333'); G.box(cx + 1.1, 1, fence - s * .3 - .2, cx + 1.65, 1.35, fence - s * .3 + .2, '#c8102e');
+        for (const [a, b] of [[x0, cx - .9], [cx + .9, x1]]) { G.box(a, 0, fence - .08, b, .7, fence + .08, '#e8e4dc'); C.push({ x0: a, x1: b, z0: fence - .15, z1: fence + .15, h: .7 }); }
+        for (const xx of [x0 - .3, x1]) { G.box(xx, 0, gz0, xx + .3, 1, gz1, '#2a6a3a', { top: '#348048' }); C.push({ x0: xx, x1: xx + .3, z0: gz0, z1: gz1, h: 1 }); }
+        // cierre del callejón entre casas (no se puede entrar por detrás)
+        for (const [a, b] of [[x1 + .3, x1 + 1.6], [x0 - 1.6, x0 - .3]]) { G.box(a, 0, fence - .3, b, 1.5, fence + .3, '#2a6a3a', { top: '#348048' }); C.push({ x0: a, x1: b, z0: fence - .35, z1: fence + .35, h: 1.5 }); }
+        G.cyl(cx - 3.4, 0, (fz + fence) / 2, .5, 1.1, 7, '#2a7a3a', { r2: .2 }); CI.push({ x: cx - 3.4, z: (fz + fence) / 2, r: .55 });
+        if (h.tier >= 3) tree(cx + 3.4, (fz + fence) / 2 + s * .3, .8);
+        G.box(cx + 1.3, 0, fence + out * .3 - .1, cx + 1.45, 1, fence + out * .3 + .1, '#333'); G.box(cx + 1.1, 1, fence + out * .3 - .2, cx + 1.65, 1.35, fence + out * .3 + .2, '#c8102e');
         // colisiones de la casa (la puerta queda libre)
-        k.sc.colliders.push({ x0, x1: cx - .9, z0, z1, h: H }, { x0: cx + .9, x1, z0, z1, h: H }, s < 0 ? { x0: cx - .9, x1: cx + .9, z0, z1: z1 - .4, h: H } : { x0: cx - .9, x1: cx + .9, z0: z0 + .4, z1, h: H });
-        // cartel de venta (cambia al comprarla o alquilarla)
+        C.push({ x0, x1: cx - .9, z0, z1, h: H }, { x0: cx + .9, x1, z0, z1, h: H }, s < 0 ? { x0: cx - .9, x1: cx + .9, z0, z1: z1 - .4, h: H } : { x0: cx - .9, x1: cx + .9, z0: z0 + .4, z1, h: H });
+        // cartel (libre / de otro jugador / tuya)
         const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128; const tex = new THREE.CanvasTexture(cv);
-        const sp = plane(1.6, .8, tex, { double: true }); sp.position.set(cx + 3.2, 1.5, fence - s * .05); k.sc.group.add(sp);
-        G.box(cx + 3.15, 0, fence - s * .05 - .05, cx + 3.25, 1.1, fence - s * .05 + .05, '#3a2a20');
+        const sp = plane(1.6, .8, tex, { double: true }); sp.position.set(cx + 3.2, 1.5, fence + out * .05); if (s < 0) sp.rotation.y = Math.PI; k.sc.group.add(sp);
+        G.box(cx + 3.15, 0, fence + out * .05 - .05, cx + 3.25, 1.1, fence + out * .05 + .05, '#3a2a20');
         this.signs[h.id] = { cv, tex }; this.drawSign(h);
-        k.sc.interact.push({ x: cx, z: fz - s * 1.3, r: 1.9, get label() { return Homes.access(h.id) ? h.n : h.n + ' · ' + (Homes.rec(h.id) && Homes.rec(h.id).m === 'rent' ? 'alquiler caducado' : 'en venta'); }, get sub() { return Homes.access(h.id) ? (Homes.owned(h.id) ? 'Tu casa · entra por la puerta' : 'Alquilada · entra por la puerta') : 'Comprar ' + fmt(h.price) + ' · alquilar ' + fmt(h.rent) + '/semana · visitar'; }, fn: () => Homes.door(h) });
+        k.sc.interact.push({ x: cx, z: fz + out * 1.3, r: 1.9, get label() { const o = Homes.ownerOf(h.id); return Homes.access(h.id) ? h.n : o ? h.n + ' · de ' + o.n : h.n + ' · libre'; }, get sub() { const o = Homes.ownerOf(h.id); return Homes.access(h.id) ? (Homes.owned(h.id) ? 'Tu casa · entra por la puerta' : 'Alquilada · entra por la puerta') : o ? 'Ocupada · puedes visitarla 1 minuto' : 'Comprar ' + fmt(h.price) + ' · alquilar ' + fmt(h.rent) + '/semana · visitar'; }, fn: () => Homes.door(h) });
       }
-      // muros traseros: el barrio no se sale por detrás
-      for (const s of [-1, 1]) { G.box(-99, 0, s * 21.4, -48.8, 2.2, s * 21.4 + s * .4, '#4a4452', { top: '#3a3442' }); k.sc.colliders.push({ x0: -99, x1: -48.8, z0: Math.min(s * 21.4, s * 21.8), z1: Math.max(s * 21.4, s * 21.8) }); }
-      k.sign('BARRIO RESIDENCIAL', '#ffd9a0', 4.6, [-44, 3.4, -5.7], 0);
+      Sec.facade(k, sc, SEC.find(b => b.id === 'growshop'));   // la GrowShop está aquí, lejos de la comisaría
+      // huecos entre tipos de casa: seto continuo
+      for (const f of HOME_FILL) { const z = f.s * 6.2; G.box(f.a, 0, z - .3, f.b, 1.6, z + .3, '#2a6a3a', { top: '#348048' }); C.push({ x0: f.a, x1: f.b, z0: z - .35, z1: z + .35, h: 1.6 }); for (let x = f.a + 2; x < f.b - 1; x += 4) tree(x, z + f.s * 3, 1); }
+      // extremo oeste de la calle y rótulos
+      G.box(HOME_X0 - 1, 0, -37, HOME_X0, 6, 37, '#2a2438'); C.push({ x0: HOME_X0 - 1, x1: HOME_X0, z0: -37, z1: 37, h: 6 });
+      k.sign('COLINA DE LAS MANSIONES', '#ff3d9a', 7, [HOME_X0 + .1, 4, 0], Math.PI / 2);
+      k.sign('BARRIO RESIDENCIAL →', '#ffd9a0', 4.6, [-44, 3.4, -5.7], 0);
       G.box(-44.1, 0, -5.9, -43.9, 2.9, -5.7, '#2a2a33');
     });
     const prev = sc.dynamic; sc.dynamic = () => { const a = prev ? prev() : []; for (const h of HOMES) if (!this.access(h.id)) a.push({ x0: h.x - .9, x1: h.x + .9, z0: h.fz - .25, z1: h.fz + .25 }); return a; };
   },
   drawSign(h) {
-    const S = (this.signs || {})[h.id]; if (!S) return; const g = S.cv.getContext('2d'), r = this.rec(h.id);
-    const mine = this.access(h.id), [bg, t1, t2] = mine ? ['#1f7a4a', this.owned(h.id) ? 'TU CASA' : 'ALQUILADA', h.n] : r && r.m === 'rent' ? ['#8a5a10', 'RENUEVA', 'alquiler caducado'] : ['#c8102e', 'SE VENDE', fmt(h.price)];
+    const S = (this.signs || {})[h.id]; if (!S) return; const g = S.cv.getContext('2d'), r = this.rec(h.id), o = this.ownerOf(h.id);
+    const mine = this.access(h.id), [bg, t1, t2] = mine ? ['#1f7a4a', this.owned(h.id) ? 'TU CASA' : 'ALQUILADA', h.n] : o ? ['#3a2a5a', 'OCUPADA', 'de ' + o.n] : r && r.m === 'rent' ? ['#8a5a10', 'RENUEVA', 'alquiler caducado'] : ['#c8102e', 'SE VENDE', fmt(h.price)];
     g.fillStyle = bg; g.fillRect(0, 0, 256, 128); g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(6, 6, 244, 116);
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = `bold 40px ${FONT_U}`; g.fillText(t1, 128, 58); g.font = `26px ${FONT_U}`; g.fillText(t2.slice(0, 18), 128, 98); S.tex.needsUpdate = true;
   },
   /** Ventana al llegar a la puerta */
   door(h) {
-    const r = this.rec(h.id), acc = this.access(h.id);
+    const r = this.rec(h.id), acc = this.access(h.id), o = this.ownerOf(h.id), other = this.takenByOther(h.id);
     const days = r && r.m === 'rent' ? Math.max(0, Math.ceil((r.until - Date.now()) / DAY_MS)) : 0;
-    UI.modal(`<h2>${h.n}</h2><p style="color:var(--muted);margin:0 0 10px">Barrio Residencial · ${h.two ? 'dos plantas' : 'una planta'} · jardín propio</p>
-      <div class="hm-row"><span>Precio de compra</span><b>${fmt(h.price)}</b></div><div class="hm-row"><span>Alquiler (7 días)</span><b>${fmt(h.rent)}</b></div>
-      ${r ? `<div class="hm-row"><span>Estado</span><b>${r.m === 'buy' ? 'Es tuya' : days ? 'Alquilada · quedan ' + days + ' días' : 'Alquiler caducado'}</b></div><div class="hm-row"><span>Muebles</span><b>${Object.keys(r.furn || {}).length} · ${fmt(this.furnVal(r))}</b></div>` : ''}
+    const m2 = Math.round((2 * h.hx) * (2 * h.hz));
+    UI.modal(`<h2>${h.n}</h2><p style="color:var(--muted);margin:0 0 10px">Barrio Residencial · ${m2} m² · ${h.two ? 'dos plantas' : 'una planta'} · jardín propio${h.pool ? ' · <b style="color:#3ff2ff">piscina</b>' : ''}</p>
+      ${other ? `<div class="hm-row"><span>Propietario</span><b>${esc(o.n)}</b></div><p class="note">Esta casa ya tiene dueño. Hay más casas iguales libres en la calle.</p>` : `<div class="hm-row"><span>Precio de compra</span><b>${fmt(h.price)}</b></div><div class="hm-row"><span>Alquiler (7 días)</span><b>${fmt(h.rent)}</b></div>`}
+      ${r && !other ? `<div class="hm-row"><span>Estado</span><b>${r.m === 'buy' ? 'Es tuya' : days ? 'Alquilada · quedan ' + days + ' días' : 'Alquiler caducado'}</b></div><div class="hm-row"><span>Muebles</span><b>${Object.keys(r.furn || {}).length} · ${fmt(this.furnVal(r))}</b></div>` : ''}
       <div class="hm-act">${acc ? '<button class="btn primary" data-in>Entrar</button>' : '<button class="btn" data-visit>Visitar 1 minuto (gratis)</button>'}
-      ${r && r.m === 'buy' ? '' : `<button class="btn primary" data-buy ${Wallet.cents < h.price ? 'disabled' : ''}>Comprar ${fmt(h.price)}</button><button class="btn" data-rent ${Wallet.cents < h.rent ? 'disabled' : ''}>${r && r.m === 'rent' ? 'Pagar 7 días más' : 'Alquilar 7 días'} · ${fmt(h.rent)}</button>`}</div>
-      <p style="color:var(--muted);font-size:13px">Las casas compradas suman a tu patrimonio y a tu estatus de riqueza. Los muebles se compran dentro, en la tablet.</p>`, c => {
+      ${(r && r.m === 'buy' && !other) || other ? '' : `<button class="btn primary" data-buy ${Wallet.cents < h.price ? 'disabled' : ''}>Comprar ${fmt(h.price)}</button><button class="btn" data-rent ${Wallet.cents < h.rent ? 'disabled' : ''}>${r && r.m === 'rent' ? 'Pagar 7 días más' : 'Alquilar 7 días'} · ${fmt(h.rent)}</button>`}</div>
+      <p style="color:var(--muted);font-size:13px">Cada casa tiene un solo dueño. Las casas compradas suman a tu patrimonio. Los muebles se compran dentro, en la tablet.</p>`, c => {
       const q = s => c.querySelector(s);
       q('[data-in]') && (q('[data-in]').onclick = () => { UI.closeModal(); World.walkTo(h.x, h.cz); });
-      q('[data-visit]') && (q('[data-visit]').onclick = () => { this.visit = { id: h.id, until: performance.now() + 60000 }; UI.closeModal(); UI.toast('Visita abierta durante 1 minuto: entra por la puerta', 'good'); World.walkTo(h.x, h.cz); setTimeout(() => { if (this.visit && this.visit.id === h.id && World.scene.id === h.id && !this.access(h.id)) { World.walkTo(h.x, h.fz - h.s * 1.5); UI.toast('Se acabó la visita', ''); } }, 61000); });
-      q('[data-buy]') && (q('[data-buy]').onclick = () => { if (!Wallet.spend(h.price, h.n)) return; const o = this.st()[h.id] || { furn: {} }; o.m = 'buy'; o.until = 0; this.st()[h.id] = o; this.changed(h); UI.closeModal(); UI.toast('¡Enhorabuena! ' + h.n + ' ya es tuya', 'good'); Sfx.play('win'); });
-      q('[data-rent]') && (q('[data-rent]').onclick = () => { if (!Wallet.spend(h.rent, h.n + ' (alquiler)')) return; const o = this.st()[h.id] || { furn: {} }; o.m = 'rent'; o.until = Math.max(Date.now(), o.until || 0) + RENT_DAYS * DAY_MS; this.st()[h.id] = o; this.changed(h); UI.closeModal(); UI.toast('Alquilada hasta el ' + new Date(o.until).toLocaleDateString('es-ES'), 'good'); Sfx.play('chip'); });
+      q('[data-visit]') && (q('[data-visit]').onclick = () => { this.visit = { id: h.id, until: performance.now() + 60000 }; UI.closeModal(); UI.toast('Visita abierta durante 1 minuto: entra por la puerta', 'good'); World.walkTo(h.x, h.cz); setTimeout(() => { if (this.visit && this.visit.id === h.id && World.scene.id === h.id && !this.access(h.id)) { World.walkTo(h.x, h.fz + (-h.s) * 1.5); UI.toast('Se acabó la visita', ''); } }, 61000); });
+      q('[data-buy]') && (q('[data-buy]').onclick = () => this.buy(h, 'buy'));
+      q('[data-rent]') && (q('[data-rent]').onclick = () => this.buy(h, 'rent'));
     });
     UI.modal && $('#modal').classList.add('right');
   },
@@ -6389,13 +6501,17 @@ const Homes = {
         <div class="hm-act">${r.m === 'buy' ? `<button class="btn danger" data-sellh>Vender la casa · ${fmt(Math.round(h.price * .8))}</button>` : `<button class="btn" data-renew ${Wallet.cents < h.rent ? 'disabled' : ''}>Pagar 7 días más · ${fmt(h.rent)}</button>`}</div>`;
       $$('[data-buyf]', c).forEach(b => b.onclick = () => { const f = FURN.find(x => x.id === b.dataset.buyf); if (!Wallet.spend(f.p, 'Muebles')) return; own[f.id] = 1; this.changed(h); Sfx.play('chip'); draw(c); });
       $$('[data-sell]', c).forEach(b => b.onclick = () => { const f = FURN.find(x => x.id === b.dataset.sell); delete own[f.id]; Wallet.grant(Math.round(f.p / 2), 'Venta de muebles'); this.changed(h); draw(c); });
-      const sh = c.querySelector('[data-sellh]'); sh && (sh.onclick = () => { const v = Math.round(h.price * .8) + Math.round(this.furnVal(r) / 2); delete this.st()[h.id]; Wallet.grant(v, 'Venta de ' + h.n); this.changed(h); UI.closeModal(); UI.toast('Casa vendida por ' + fmt(v) + ' (muebles incluidos)', 'good'); World.walkTo(h.x, h.fz - h.s * 1.5); });
-      const rn = c.querySelector('[data-renew]'); rn && (rn.onclick = () => { if (!Wallet.spend(h.rent, h.n + ' (alquiler)')) return; r.until = Math.max(Date.now(), r.until) + RENT_DAYS * DAY_MS; this.changed(h); draw(c); });
+      const sh = c.querySelector('[data-sellh]'); sh && (sh.onclick = () => { const v = Math.round(h.price * .8) + Math.round(this.furnVal(r) / 2); delete this.st()[h.id]; if (this.online()) Net.transport.send({ t: 'hsell', id: h.id }); Wallet.grant(v, 'Venta de ' + h.n); this.changed(h); UI.closeModal(); UI.toast('Casa vendida por ' + fmt(v) + ' (muebles incluidos)', 'good'); World.walkTo(h.x, h.fz + (-h.s) * 1.5); });
+      const rn = c.querySelector('[data-renew]'); rn && (rn.onclick = () => { this.buy(h, 'rent'); });
     };
     UI.modal('', draw); $('#modal').classList.add('right');
   },
   changed(h) { Prog.save(); this.drawSign(h); this.furnish(h); Prog.check && Prog.check(); Prog.render && Prog.render(); },
 };
+{
+  const _rh = Net.receive; Net.receive = function (m) { if (m && (m.t === 'homes' || m.t === 'hok' || m.t === 'hno') && Homes.onMsg(m)) return; return _rh.call(this, m); };
+  Bus.on('net', on => { if (on) { Homes.synced = false; Homes.pend = {}; } });
+}
 ACHS.push(['home1', 'Propietario', 'Compra tu primera casa', () => Homes.count() >= 1], ['home5', 'Decorador', 'Compra 5 muebles', () => Homes.furnCount() >= 5]);
 
 /* ---- 22_city.js ---- */
@@ -6521,18 +6637,19 @@ const Biz = {
   lost(id) { const b = BIZ.find(x => x.id === id); if (!b || !this.st()[id]) return; delete this.st()[id]; Wallet.grant(b.p, 'Devolución de ' + b.n); Prog.save(); UI.toast('Ahora cada negocio tiene un solo dueño: ' + b.n + ' ya no es tuyo y te devolvemos ' + fmt(b.p), ''); },
   aucLeft() { const a = this.auc; if (!a) return ''; const l = Math.max(0, a.left - (performance.now() - a.at)), h = Math.floor(l / 36e5), mi = Math.floor(l % 36e5 / 6e4), se = Math.floor(l % 6e4 / 1e3); return h ? h + ' h ' + mi + ' min' : mi + ' min ' + se + ' s'; },
   aucEv(m) {
-    const bad = m.k === 'out'; UI.toast(m.txt, bad ? 'bad' : m.k === 'end' ? 'good' : ''); if (m.k === 'start' || m.k === 'end' || bad) Sfx.play(bad ? 'lose' : 'win');
-    try { Chat.add && Chat.add({ sys: true, txt: m.txt }); } catch (e) { }
+    const mine = m.k === 'out', on = Settings.notif !== false;
+    if (mine || on) { UI.toast(m.txt, mine ? 'bad' : m.k === 'end' ? 'good' : ''); if (mine) Sfx.play('lose'); }
+    if (on) { try { Chat.add && Chat.add({ sys: true, txt: m.txt }); } catch (e) { } this.showUntil = performance.now() + (m.k === 'end' ? 6000 : 14000); }
     this.bar();
   },
   bar() {
     let d = document.getElementById('aucBar');
-    if (!d) { d = document.createElement('div'); d.id = 'aucBar'; document.body.appendChild(d); }
-    const a = this.auc; if (!a || !this.online()) { d.style.display = 'none'; return; }
+    if (!d) { d = document.createElement('div'); d.id = 'aucBar'; d.onclick = () => { this.showUntil = 0; this.bar(); }; document.body.appendChild(d); }
+    const a = this.auc; if (!a || !this.online() || Settings.notif === false || !(this.showUntil > performance.now())) { d.style.display = 'none'; return; }
     const b = BIZ.find(x => x.id === a.id); if (!b) { d.style.display = 'none'; return; }
     const l = Math.max(0, a.left - (performance.now() - a.at)), mm = Math.floor(l / 6e4), ss = Math.floor(l % 6e4 / 1e3);
     d.style.display = 'flex'; d.className = l < 6e4 ? 'hot' : '';
-    d.innerHTML = '<div class="ab-t">🔨 SUBASTA</div><div class="ab-n">' + b.n + '</div><div class="ab-p">' + fmt(a.top ? a.top.c : a.min) + '<small>' + (a.top ? esc(a.top.n) : 'precio inicial') + '</small></div><div class="ab-c">' + String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0') + '</div>';
+    d.innerHTML = '<div class="ab-t">🔨 SUBASTA</div><div class="ab-n">' + b.n + '</div><div class="ab-p">' + fmt(a.top ? a.top.c : a.min) + '<small>' + (a.top ? esc(a.top.n) : 'precio inicial') + '</small></div><div class="ab-c">' + String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0') + '</div><div class="ab-x">✕</div>';
   },
   aucHtml() {
     const a = this.auc; if (!this.online()) return '<p class="note">Las subastas son entre jugadores reales: conéctate al servidor.</p>';
@@ -6743,7 +6860,7 @@ function buildSur() {
   });
 }
 
-{ const st = document.createElement('style'); st.textContent = '#aucBar{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:30;display:none;align-items:center;gap:14px;padding:8px 16px;border-radius:14px;background:linear-gradient(135deg,#2a0a4a,#0a2a4a);border:2px solid #ff3df2;box-shadow:0 0 18px #ff3df2aa;color:#fff;font:700 14px system-ui;pointer-events:none}#aucBar.hot{border-color:#ff4d4d;box-shadow:0 0 22px #ff4d4d;animation:abp .6s infinite alternate}#aucBar .ab-t{color:#ff3df2;letter-spacing:2px;font-size:12px}#aucBar .ab-n{font-size:16px}#aucBar .ab-p{color:#7dffb0;display:flex;flex-direction:column;line-height:1.1}#aucBar small{color:#aab;font-weight:400;font-size:11px}#aucBar .ab-c{font:800 20px monospace;color:#ffe14d}@keyframes abp{to{transform:translateX(-50%) scale(1.04)}}@media(max-width:700px){#aucBar{gap:8px;font-size:12px;padding:6px 10px}}'; document.head.appendChild(st); setInterval(() => { try { Biz.bar(); } catch (e) { } }, 1000); }
+{ const st = document.createElement('style'); st.textContent = '#aucBar{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:30;display:none;align-items:center;gap:14px;padding:8px 16px;border-radius:14px;background:linear-gradient(135deg,#2a0a4a,#0a2a4a);border:2px solid #ff3df2;box-shadow:0 0 18px #ff3df2aa;color:#fff;font:700 14px system-ui;cursor:pointer;opacity:.95;transform:translateX(-50%) scale(.88)}#aucBar .ab-x{color:#aab;font-size:12px}#aucBar.hot{border-color:#ff4d4d;box-shadow:0 0 22px #ff4d4d;animation:abp .6s infinite alternate}#aucBar .ab-t{color:#ff3df2;letter-spacing:2px;font-size:12px}#aucBar .ab-n{font-size:16px}#aucBar .ab-p{color:#7dffb0;display:flex;flex-direction:column;line-height:1.1}#aucBar small{color:#aab;font-weight:400;font-size:11px}#aucBar .ab-c{font:800 20px monospace;color:#ffe14d}@keyframes abp{to{transform:translateX(-50%) scale(1.04)}}@media(max-width:700px){#aucBar{gap:8px;font-size:12px;padding:6px 10px}}'; document.head.appendChild(st); setInterval(() => { try { Biz.bar(); } catch (e) { } }, 1000); }
 
 /* ---- 23_jobs.js ---- */
 /* =====================================================================
@@ -6788,7 +6905,7 @@ const Jobs = {
   /* ---------- Repartidor y Taxista (en el mundo abierto) ---------- */
   spots() {
     const L = [['BURGER BOOM', 0, 8.4], ['Casino Neon Royale', 0, -6.5], ['Ayuntamiento', 0, 49.5], ['Parque Central', -50, 50], ['Centro comercial Salera', 72, -11.5], ['Avenida Salera', 60, 6], ['Playa del Neón', -30, 107]];
-    for (const h of HOMES) L.push([h.n, h.x, h.fz - h.s * 1.4]);
+    for (const h of HOMES.slice(0, 12)) L.push([h.n, h.x, h.fz - h.s * 1.4]);
     for (const [id, x, z] of [['kiosk', -18.5, 76], ['cafe', 0, 76], ['phones', 18.5, 76], ['club', -18.5, 104], ['bowling', 0, 104], ['gym', 18.5, 104], ['wash', -51.5, 84], ['beach', -14, 110]]) L.push([BIZ.find(b => b.id === id).n, x, z]);
     return L;
   },
@@ -7132,9 +7249,12 @@ const NEWS = [
 
 /* ---------------- Patch Notes ---------------- */
 const PATCHES = [
-  { v: 'v1.4', t: 'Mejoras de calidad de vida', cur: 1,
-    nuevo: ['Subastas con cuenta atrás: 15 min, +1 min por puja, aviso grande en pantalla y devolución automática si te superan', 'Aviso periódico para publicar propuestas en Suggestions', 'Policías con uniforme y patrulla funcional (sirena)', 'Patch Notes con resumen de cada versión'],
-    cambios: ['Sin cubo en el spawn; con casa propia empiezas dentro de ella', 'Chat: historial al entrar, sin mensajes duplicados ni atascados', 'Ciclo día/noche compartido: días luminosos, atardeceres y noches equilibradas', 'Sueldos: distribuidor > policía > socorrista; policía 833 €/10 min', 'Guardado del servidor más seguro (escritura atómica, copia de seguridad y volcado al apagar)', 'Ruleta: apuestas devueltas si se pierde la conexión'] },
+  { v: 'v1.5', t: 'Casas, edificios y avisos', cur: 1,
+    nuevo: ['34 casas en 8 tipos, cada tipo más grande y mejor que el anterior; desde la Casa del Parque tienen piscina interior', 'Cada casa tiene un único dueño y el cartel muestra quién la tiene', 'Comisaría, Cárcel, Armería y GrowShop con su propia arquitectura y detalles', 'Ajustes → «Avisos de otros jugadores» para silenciar premios, subastas y recordatorios'],
+    cambios: ['La GrowShop está ahora en el Barrio Residencial, lejos de la comisaría', 'Una subasta cada unos 45 min (antes salía siempre) y el aviso es más pequeño y se puede cerrar', 'Ruleta: tus fichas ya no desaparecen cuando apuesta otro jugador', 'Barrio Residencial ampliado hacia el oeste con calle iluminada'] },
+  { v: 'v1.4', t: 'Mejoras de calidad de vida',
+    nuevo: ['Subastas con cuenta atrás: 15 min, +1 min por puja, devolución automática si te superan', 'Aviso periódico para publicar propuestas en Suggestions', 'Policías con uniforme y patrulla funcional', 'Patch Notes con resumen de cada versión'],
+    cambios: ['Sin cubo en el spawn; con casa propia empiezas dentro de ella', 'Chat: historial al entrar y sin mensajes duplicados', 'Ciclo día/noche compartido con días luminosos, atardeceres y noches más claras', 'Sueldos: distribuidor > policía > socorrista', 'Guardado del servidor más seguro (copia de seguridad y volcado al apagar)'] },
   { v: 'v1.3', t: 'Crimen, policía y club',
     nuevo: ['Un policía y un distribuidor secretos por servidor', 'Complejo de seguridad: comisaría, cárcel, armería y GrowShop', 'Armas con licencia, Bizum y club nocturno', 'Verificación de edad (18+)'],
     cambios: ['Mapa ampliado', 'Pruebas, arrestos y recompensas validados por el servidor'] },
@@ -7222,7 +7342,7 @@ const Board = {
     const st = document.createElement('style'); st.textContent = '.pn{margin:10px 0;padding:10px 12px;border-radius:12px;background:#ffffff0d;border-left:3px solid #7a5cff}.pn-big{border-left-color:#ff3df2;background:linear-gradient(135deg,#3a0a5a66,#0a2a5a66);box-shadow:0 0 20px #ff3df255;font-size:15px}.pn-h{display:flex;gap:8px;align-items:center}.pn-v{background:#7a5cff;color:#fff;border-radius:8px;padding:1px 8px;font-weight:800}.pn-h em{margin-left:auto;font-style:normal;font-size:11px;background:#2bd67b;color:#04210f;border-radius:6px;padding:1px 6px;font-weight:800}.pn h4{margin:8px 0 2px;font-size:13px;color:#ffe14d}.pn ul{margin:0;padding-left:18px;color:#dde}';
     document.head.appendChild(st);
     if (Store.get('pn_seen', null) !== PN_VER) setTimeout(() => { try { this.newsModal(1); } catch (e) { } }, 6000);
-    setInterval(() => { if (document.hidden) return; UI.toast('💡 ¿Tienes ideas? Publica tu propuesta en «Suggestions» y vótalas con los demás', ''); }, 10 * 60e3);
+    setInterval(() => { if (document.hidden || Settings.notif === false) return; UI.toast('💡 ¿Tienes ideas? Publica tu propuesta en «Suggestions» y vótalas con los demás', ''); }, 10 * 60e3);
   },
   newsModal(only) {
     this.nb.classList.remove('new'); Store.set('newsSeen', (this.news[0] || {}).at || 0); Store.set('pn_seen', PN_VER);
@@ -7739,7 +7859,7 @@ const Cop = {
 
 /* ---------- Distribuidor (secreto): casa, cultivo, ventas a compradores de la calle ---------- */
 const Dealer = {
-  houseId() { const id = World.scene && World.scene.id; return /^h\d$/.test(id || '') && Homes.owned(id) ? id : ''; },
+  houseId() { const id = World.scene && World.scene.id; return /^h\d+$/.test(id || '') && Homes.owned(id) ? id : ''; },
   anyHouse() { return HOMES.some(h => Homes.owned(h.id)); },
   join() {
     if (CR.role === 'dealer') return this.modal();
@@ -7854,7 +7974,7 @@ const SEC = [
   { id: 'poli', n: 'Comisaría', cx: -56.3, cz: -104.8, door: 'S', col: '#2c3e6a', neon: '#4aa0ff', carpet: ['#1c2230', 'rgba(74,160,255,.25)'], wall: { base: '#222c44', top: '#101624', dado: '#161e30', gold: '#4aa0ff', neon: '#4aa0ff' } },
   { id: 'carcel', n: 'Cárcel', cx: -45.8, cz: -104.8, door: 'S', col: '#4a4a52', neon: '#ff4a4a', carpet: ['#26262c', 'rgba(255,74,74,.2)'], wall: { base: '#3a3a42', top: '#1c1c22', dado: '#2a2a30', gold: '#8a8a94', neon: '#ff4a4a' } },
   { id: 'armeria', n: 'Armería', cx: -56.3, cz: -83.8, door: 'N', col: '#3a3226', neon: '#ffb347', carpet: ['#241c14', 'rgba(255,179,71,.2)'], wall: { base: '#322a20', top: '#161008', dado: '#241c14', gold: '#ffb347', neon: '#ffb347' } },
-  { id: 'growshop', n: 'GrowShop Verde', cx: -45.8, cz: -83.8, door: 'N', col: '#1f4a2a', neon: '#3df58a', carpet: ['#14281a', 'rgba(61,245,138,.2)'], wall: { base: '#1c3a24', top: '#0a1c10', dado: '#122a1a', gold: '#3df58a', neon: '#3df58a' } },
+  { id: 'growshop', n: 'GrowShop Verde', cx: -62, cz: -16, door: 'S', col: '#1f4a2a', neon: '#3df58a', carpet: ['#14281a', 'rgba(61,245,138,.2)'], wall: { base: '#1c3a24', top: '#0a1c10', dado: '#122a1a', gold: '#3df58a', neon: '#3df58a' } },
 ];
 const WEAPONS = [
   { id: 'pistol', n: 'Pistola', p: 90000, ammo: 30, pack: 30, pp: 6000, d: 'Compacta y rápida. Cargador de 30.' },
@@ -7880,24 +8000,85 @@ const Sec = {
     C.push({ x0: -59.8, x1: -57.2, z0: -97.8, z1: -95, h: 1.4 }); k.gl3.add(-58.6, 1.5, -96.4, '#4aa0ff', .7);
     k.sign('COMPLEJO DE SEGURIDAD', '#4aa0ff', 6, [-51, 4.6, -90.2], 0);
     G.box(-51.1, 0, -90.4, -50.9, 4, -90.1, '#2a2a33');
-    for (const b of SEC) this.facade(k, sc, b);
+    for (const b of SEC) if (b.id !== 'growshop') this.facade(k, sc, b);
+    // aparcamiento de la comisaría (donde estaba el solar libre)
+    G.floor(-51, -90, -41, -78, .026, '#3a3646', true); for (let z = -88; z < -79; z += 3) G.floor(-50.5, z, -41.5, z + .1, .03, '#e8e8e8', false);
+    for (const [x, z] of [[-48.2, -86.5], [-48.2, -82]]) { G.box(x - 1.1, .25, z - 2.1, x + 1.1, .85, z + 2.1, '#f4f4f4'); G.box(x - .9, .85, z - 1.4, x + .9, 1.25, z + 1.6, '#2a3a5a', { lit: false }); G.box(x - .8, 1.25, z - .4, x + .8, 1.4, z + .4, '#ff3030', { lit: false }); C.push({ x0: x - 1.2, x1: x + 1.2, z0: z - 2.2, z1: z + 2.2, h: 1.4 }); k.gl3.add(x, 1.5, z, '#4aa0ff', .6); }
     // muro trasero
     G.box(-61.9, 0, -110.5, -40.6, 2.4, -110.1, '#3a3442'); C.push({ x0: -62, x1: -40.5, z0: -110.6, z1: -110, h: 2.4 });
     // luces
     for (const [x, z] of [[-61, -94], [-42, -94]]) { G.cyl(x, 0, z, .1, 4.5, 6, '#2a2a33'); k.gl8.add(x, 4.5, z, '#ffd9a0', .4); }
   },
+  /** Fachada de cada edificio: cada uno tiene su propia arquitectura (no son cajas iguales) */
   facade(k, sc, b) {
-    const { G } = k, { cx, cz, col, neon } = b, x0 = cx - 5.2, x1 = cx + 5.2, z0 = cz - 5.2, z1 = cz + 5.2, H = 5.4, S = b.door === 'S', fz = S ? z1 : z0, dz = S ? 1 : -1, face = S ? 's' : 'n';
-    G.box(x0, 0, z0, cx - .9, H, z1, col, { top: '#1c1c22' }); G.box(cx + .9, 0, z0, x1, H, z1, col, { top: '#1c1c22' });
-    if (S) { G.box(cx - .9, 0, z0, cx + .9, H, z1 - .4, col); G.box(cx - .9, 3.2, z1 - .4, cx + .9, H, z1, col); } else { G.box(cx - .9, 0, z0 + .4, cx + .9, H, z1, col); G.box(cx - .9, 3.2, z0, cx + .9, H, z0 + .4, col); }
-    G.box(x0 - .3, H, z0 - .3, x1 + .3, H + .3, z1 + .3, '#1c1c22');
-    for (const dx of [-1.05, .9]) G.box(cx + dx, 0, fz - .1, cx + dx + .15, 3.3, fz + .1, '#d8d8e0');
-    const win = (a0, a1, y0) => { for (let a = a0; a + 1.3 <= a1; a += 2.3) G.rect(face, fz, a, a + 1.3, y0, y0 + 1.4, b.id === 'carcel' ? '#444' : '#ffe8b0', false, .03); };
-    win(x0 + .8, cx - 1.6, 1.4); win(cx + 1.6, x1 - .6, 1.4);
-    if (b.id === 'carcel') for (let a = x0 + .8; a < cx - 1.6; a += .35) G.box(a, 1.4, fz + dz * .04 - .02, a + .06, 2.8, fz + dz * .04 + .02, '#111');
-    for (let x = x0; x <= x1; x += .8) k.gl1.add(x, H + .2, fz + dz * .3, neon, .4);
-    k.sign(b.n.toUpperCase(), neon, 6.6, [cx, 4.5, fz + dz * .08], S ? 0 : Math.PI, null, .4); k.gl3.add(cx, 3.5, fz + dz * .3, neon, .6);
-    sc.colliders.push({ x0, x1: cx - .9, z0, z1, h: H }, { x0: cx + .9, x1, z0, z1, h: H }, S ? { x0: cx - .9, x1: cx + .9, z0, z1: z1 - .4, h: H } : { x0: cx - .9, x1: cx + .9, z0: z0 + .4, z1, h: H });
+    const { G } = k, C = sc.colliders, { cx, cz } = b, x0 = cx - 5.2, x1 = cx + 5.2, z0 = cz - 5.2, z1 = cz + 5.2, S = b.door === 'S', fz = S ? z1 : z0, dz = S ? 1 : -1, face = S ? 's' : 'n';
+    const T = { poli: { H: 7.4, col: '#e6eaf3', base: '#2c3e6a', top: '#c8d0e0' }, carcel: { H: 6.6, col: '#8c8c96', base: '#55555e', top: '#6a6a74' }, armeria: { H: 5.4, col: '#59603f', base: '#3a3a2a', top: '#3a4028' }, growshop: { H: 5.8, col: '#dff0dc', base: '#1f5a34', top: '#bcd8bc' } }[b.id], H = T.H;
+    const Z = d => fz + dz * d;
+    const fb = (u0, d0, u1, d1, y0, y1, col, o, solid) => { const p = Z(d0), q = Z(d1); G.box(cx + u0, y0, Math.min(p, q), cx + u1, y1, Math.max(p, q), col, o || {}); if (solid) C.push({ x0: cx + u0, x1: cx + u1, z0: Math.min(p, q), z1: Math.max(p, q), h: y1 }); };
+    const fr = (u0, u1, y0, y1, col, lit = false, off = .03) => G.rect(face, fz, cx + u0, cx + u1, y0, y1, col, lit, off);
+    const sign = (txt, col, w, y, d = .1) => k.sign(txt, col, w, [cx, y, Z(d)], S ? 0 : Math.PI, null, .4);
+    const emblem = (draw, w, h, u, y, d = .09) => { const p = plane(w, h, ctex(128, 128 * h / w, draw).tex, { transparent: true }); p.position.set(cx + u, y, Z(d)); p.rotation.y = S ? 0 : Math.PI; sc.group.add(p); };
+    const post = (u, d, hh, col) => { G.cyl(cx + u, 0, Z(d), .14, hh, 6, col); };
+    // ---- cuerpo con hueco de puerta ----
+    G.box(x0, 0, z0, cx - .9, H, z1, T.col, { top: T.top }); G.box(cx + .9, 0, z0, x1, H, z1, T.col, { top: T.top });
+    if (S) { G.box(cx - .9, 0, z0, cx + .9, H, z1 - .4, T.col); G.box(cx - .9, 3.2, z1 - .4, cx + .9, H, z1, T.col); } else { G.box(cx - .9, 0, z0 + .4, cx + .9, H, z1, T.col); G.box(cx - .9, 3.2, z0, cx + .9, H, z0 + .4, T.col); }
+    C.push({ x0, x1: cx - .9, z0, z1, h: H }, { x0: cx + .9, x1, z0, z1, h: H }, S ? { x0: cx - .9, x1: cx + .9, z0, z1: z1 - .4, h: H } : { x0: cx - .9, x1: cx + .9, z0: z0 + .4, z1, h: H });
+    fb(-5.3, -.05, 5.3, .08, 0, 1.1, T.base);                                          // zócalo
+    for (const dx of [-1.05, .9]) fb(dx, -.1, dx + .15, .1, 0, 3.3, b.id === 'growshop' ? '#2a6a3a' : '#d8d8e0');   // marco de la puerta
+    const lights = (col, y = H + .2) => { for (let x = x0; x <= x1; x += .8) k.gl1.add(x, y, Z(.3), col, .4); };
+
+    if (b.id === 'poli') {
+      // edificio institucional: cornisa azul, pórtico con columnas, torre central con luces de sirena
+      fb(-5.4, -.2, 5.4, .2, H - .5, H, '#2c3e6a'); fb(-5.4, -.1, 5.4, .1, H, H + .5, '#e6eaf3');
+      fb(-2.4, 0, 2.4, 0.9, 3.5, 3.8, '#e6eaf3'); fb(-2.6, 0, 2.6, 1.0, 3.8, 4.2, '#2c3e6a'); // marquesina
+      for (const u of [-2.2, -1.5, 1.5, 2.2]) { G.cyl(cx + u, 0, Z(.8), .18, 3.5, 8, '#f4f6fa'); sc.circles.push({ x: cx + u, z: Z(.8), r: .25 }); }
+      for (let i = 0; i < 3; i++) fb(-1.4, .5 + i * .45, 1.4, .95 + i * .45, 0, .16 - i * .05, '#d8dce6');  // escalones
+      for (const [u0, u1] of [[-5, -1.7], [1.7, 5]]) for (let a = u0 + .2; a + 1.2 <= u1; a += 1.7) { fr(a, a + 1.2, 1.5, 3.1, '#8cc0ff', true); fr(a, a + 1.2, 4.5, 6.1, '#8cc0ff', true); fb(a - .08, 0, a + 1.28, .12, 1.4, 1.5, '#2c3e6a'); }
+      fb(-3.5, 0, 3.5, 0.15, 6.4, 6.7, '#2c3e6a');
+      // torre de comunicaciones y barra de luces
+      fb(-1.2, -.5, 1.2, -3.6, H, H + 1.4, '#c8d0e0'); G.cyl(cx, H + 1.4, Z(-2), .07, 3, 6, '#9aa'); k.gl3.add(cx, H + 4.4, Z(-2), '#ff3030', .6);
+      fb(-.9, .1, -.1, .5, H + .5, H + .8, '#ff2a2a', { lit: false }); fb(.1, .1, .9, .5, H + .5, H + .8, '#2a6aff', { lit: false }); k.gl3.add(cx - .5, H + 1, Z(.3), '#ff3030', .7); k.gl3.add(cx + .5, H + 1, Z(.3), '#4a8aff', .7);
+      emblem(g => { g.fillStyle = '#2c3e6a'; g.beginPath(); g.moveTo(64, 6); g.lineTo(116, 22); g.lineTo(110, 78); g.lineTo(64, 122); g.lineTo(18, 78); g.lineTo(12, 22); g.closePath(); g.fill(); g.strokeStyle = '#ffcf5a'; g.lineWidth = 6; g.stroke(); g.fillStyle = '#ffcf5a'; g.beginPath(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 16 : 38, a = -Math.PI / 2 + i * Math.PI / 5; g.lineTo(64 + Math.cos(a) * r, 62 + Math.sin(a) * r); } g.closePath(); g.fill(); }, 1.9, 2.1, 0, 5.3, .1);
+      sign('POLICÍA', '#4aa0ff', 5.2, 4.75, .12);
+      // mástil con bandera, bolardos y coches patrulla
+      post(-4.4, 1.8, 5.8, '#d8d8e0'); { const f = plane(1.5, .9, ctex(96, 64, g => { g.fillStyle = '#c8102e'; g.fillRect(0, 0, 96, 64); g.fillStyle = '#ffcf3a'; g.fillRect(0, 20, 96, 24); }).tex, { double: true }); f.position.set(cx - 3.6, 5.2, Z(1.8)); f.rotation.y = S ? 0 : Math.PI; sc.group.add(f); }
+      for (let u = -5; u <= 5; u += 1.25) if (Math.abs(u) > 1.6) { G.cyl(cx + u, 0, Z(2.6), .12, .7, 6, '#ffd24a'); }
+      lights('#4aa0ff');
+    } else if (b.id === 'carcel') {
+      // prisión: muro de hormigón, ventanas con barrotes, garita en cada esquina y alambrada
+      fb(-5.4, -.2, 5.4, .2, H - .4, H, '#3a3a42'); fb(-5.4, -.08, 5.4, .08, 4.9, 5.0, '#2a2a30');
+      for (const [u0, u1] of [[-5, -1.9], [1.9, 5]]) for (let a = u0 + .3; a + .7 <= u1; a += 1.1) { fr(a, a + .7, 3.0, 4.6, '#16161c', false); for (let q = 0; q < 4; q++) fb(a + .08 + q * .17, .0, a + .13 + q * .17, .06, 3.0, 4.6, '#9a9aa4', { lit: false }); }
+      for (const u of [-4.2, 4.2]) { fb(u - .9, -.4, u + .9, -2.2, 0, H + 2.6, '#6a6a74', { top: '#3a3a42' }); fb(u - 1.1, -.2, u + 1.1, -2.4, H + 2.6, H + 3.2, '#2a2a30'); fb(u - .5, -.8, u + .5, -1.8, H + 3.2, H + 3.5, '#ff4a4a', { lit: false }); k.gl3.add(cx + u, H + 3.4, Z(-1.3), '#ff4a4a', .8); }
+      fb(-.8, .1, .8, .35, 0, 3.2, '#4a4a54'); for (let q = -.6; q <= .6; q += .2) fb(q, .35, q + .05, .4, 0, 3.0, '#aaa', { lit: false });   // reja de la puerta
+      for (let a = -5.2; a <= 5.2; a += .2) if (Math.abs(a) > 1.3) fb(a, -.05, a + .04, .05, H + .0, H + .5, '#aaa', { lit: false });   // alambre de espino
+      // valla frontal con puerta, postes con luz roja
+      for (const [u0, u1] of [[-5.6, -1.2], [1.2, 5.6]]) { fb(u0, 2.3, u1, 2.4, 0, 2.2, '#5a5a64', {}, true); for (let a = u0; a <= u1; a += .25) fb(a, 2.31, a + .04, 2.39, 2.2, 2.6, '#aaa', { lit: false }); }
+      for (const u of [-5.6, -1.2, 1.2, 5.6]) { fb(u - .12, 2.2, u + .12, 2.5, 0, 3, '#3a3a42'); k.gl3.add(cx + u, 3.1, Z(2.35), '#ff4a4a', .5); }
+      sign('CÁRCEL', '#ff4a4a', 4.6, 5.55, .12); lights('#ff4a4a', 5.2);
+      emblem(g => { g.strokeStyle = '#ff4a4a'; g.lineWidth = 8; g.strokeRect(14, 14, 100, 100); for (let q = 34; q < 110; q += 22) { g.beginPath(); g.moveTo(q, 14); g.lineTo(q, 114); g.stroke(); } }, 1.3, 1.3, -3.4, 5.5, .12);
+    } else if (b.id === 'armeria') {
+      // fortín militar: camuflaje, sacos terreros, cajas de munición y persiana metálica
+      for (let i = 0; i < 9; i++) fb(-5.2 + i * 1.2, 0, -4.2 + i * 1.2, .06, 1.1 + (i % 3) * .9, 2.0 + (i % 3) * .9, ['#3a4228', '#4a5434', '#2c3220'][i % 3], { lit: false });
+      fb(-5.4, -.2, 5.4, .2, H - .4, H, '#2a2a20'); for (let a = -5.2; a < 5.2; a += 1.1) fb(a, -.1, a + .6, .1, H, H + .5, '#3a3a2a');
+      for (const [u0, u1] of [[-5, -1.7], [1.7, 5]]) for (let a = u0 + .2; a + 1.4 <= u1; a += 1.9) { fr(a, a + 1.4, 1.2, 2.6, '#222', false); for (let q = 0; q < 6; q++) fr(a, a + 1.4, 1.2 + q * .24, 1.25 + q * .24, '#6a6a60', false, .05); }
+      for (const u of [-3.6, 3.6]) for (let r = 0; r < 3; r++) for (let q = 0; q < 3 - r; q++) fb(u - 1 + q * .7 + r * .35, 1.2 + (r ? 0 : 0), u - .4 + q * .7 + r * .35, 1.9, r * .45, r * .45 + .45, '#a89a6a', { top: '#b8aa7a' }, r === 0 && q === 0);
+      fb(-5.2, 3.0, -4.2, 3.9, 0, .6, '#6a4a2a', { top: '#8a6a3a' }, true); fb(4.2, 3.0, 5.2, 3.9, 0, .6, '#6a4a2a', { top: '#8a6a3a' }, true);
+      emblem(g => { g.strokeStyle = '#ffb347'; g.lineWidth = 7; g.beginPath(); g.arc(64, 64, 46, 0, Math.PI * 2); g.stroke(); g.beginPath(); g.arc(64, 64, 24, 0, Math.PI * 2); g.stroke(); g.fillStyle = '#ffb347'; g.beginPath(); g.arc(64, 64, 8, 0, Math.PI * 2); g.fill(); g.fillRect(60, 6, 8, 116); g.fillRect(6, 60, 116, 8); }, 1.4, 1.4, -3.5, 4.5, .1);
+      sign('ARMERÍA', '#ffb347', 4.4, 4.5, .12); lights('#ffb347', H + .1);
+      post(4.6, 1.0, 5.5, '#aaa'); { const f = plane(1.3, .8, ctex(96, 64, g => { g.fillStyle = '#3a4228'; g.fillRect(0, 0, 96, 64); g.fillStyle = '#ffb347'; g.fillRect(36, 12, 24, 40); }).tex, { double: true }); f.position.set(cx + 5.3, 5.0, Z(1.0)); f.rotation.y = S ? 0 : Math.PI; sc.group.add(f); }
+    } else {
+      // tienda de cultivo: invernadero acristalado en el tejado, macetas con plantas, toldo a rayas y luz morada
+      fb(-5.4, -.2, 5.4, .2, H - .4, H, '#1f5a34');
+      for (let a = -4.6; a <= 4.6; a += 1.5) { fb(a, 0, a + 1.0, .5, 0, .8, '#6a4a2a'); G.cyl(cx + a + .5, .8, Z(.25), .4, 1.4, 7, '#2f8a3a', { r2: .1 }); }
+      for (let i = 0; i < 6; i++) fb(-4 + i * 1.4, 0, -3.1 + i * 1.4, 1.6, 3.4, 3.6 + (i % 2) * .05, i % 2 ? '#fff' : '#2a8a3a', {}, false);
+      for (const [u0, u1] of [[-5, -1.8], [1.8, 5]]) { fr(u0 + .2, u1 - .2, 1.2, 3.0, '#b45cff', true); for (let a = u0 + .2; a <= u1 - .2; a += .8) fr(a, a + .06, 1.2, 3.0, '#e8f4e8', false, .05); for (let q = 0; q < 3; q++) fr(u0 + .2, u1 - .2, 1.2 + q * .9, 1.26 + q * .9, '#e8f4e8', false, .05); }
+      { const gz0 = Z(-.6), gz1 = Z(-4.4), a = Math.min(gz0, gz1), c = Math.max(gz0, gz1); G.box(x0 + .8, H, a, x1 - .8, H + .3, c, '#1f5a34'); G.box(x0 + 1, H + .3, a + .3, x1 - 1, H + 1.9, c - .3, '#a8e0b0', { top: '#d8f4dc' }); for (let q = x0 + 1; q < x1 - 1; q += 1.3) G.box(q, H + .3, a + .25, q + .08, H + 1.9, c - .25, '#1f5a34'); k.gl8.add(cx, H + 1.2, Z(-2.5), '#b45cff', .8); }
+      emblem(g => { g.fillStyle = '#3df58a'; g.translate(64, 78); for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + (i - 3) * .42, L = i === 3 ? 62 : 52 - Math.abs(i - 3) * 6; g.save(); g.rotate(a + Math.PI / 2); g.beginPath(); g.ellipse(0, -L / 2, 7, L / 2, 0, 0, Math.PI * 2); g.fill(); g.restore(); } g.fillRect(-3, 0, 6, 40); }, 1.5, 1.5, -3.5, 4.5, .1);
+      sign('GROWSHOP VERDE', '#3df58a', 7.4, 4.6, .12); lights('#3df58a', H + .1);
+    }
+    k.gl3.add(cx, 3.5, Z(.4), b.neon, .6);
+    // pavimento frente a la puerta
+    G.floor(x0, Math.min(fz, Z(4.6)), x1, Math.max(fz, Z(4.6)), .018, '#5a5468', true);
   },
 
   interior(b) {
@@ -7972,7 +8153,7 @@ const Sec = {
     for (const [x, z] of [[2.5, -3.9], [3.5, -3.9], [2.5, -2.8], [3.5, -2.8]]) { const [X, Z] = m.T(x, z); G.cyl(X, 0, Z, .3, .5, 7, '#6a4a2a'); G.cyl(X, .5, Z, .35, 1.1, 7, '#2a8a3a', { r2: .1 }); }
     for (const x of [-2.4, -1.2, 0, 1.2]) m.box(x, -4.55, x + .6, -4.2, 2.2, '#3df58a', { lit: false }, false, 2);
     m.inter(-.6, 1.5, { r: 1.8, label: 'GrowShop · Mostrador', sub: 'Semillas, lámparas LED, ventilación y máscaras', fn: () => Sec.growShop() });
-    m.inter(-3.5, 2.6, { label: 'Dueño de la tienda', sub: 'Hablar con el dueño (trabajo bien pagado)', fn: () => Dealer.join() });
+    m.inter(-.6, -.2, { r: 2.4, label: 'Dueño de la tienda', sub: 'Hablar con el dueño (trabajo bien pagado)', fn: () => Dealer.join() });
   },
 
   /* ---------- tiendas ---------- */
@@ -7983,8 +8164,8 @@ const Sec = {
       const draw = () => {
         const dl = CR.role === 'dealer', d = CR.d || { lamp: 1 }, can = (n) => Wallet.cents >= n;
         const rows = [['seed1', '🌱 Semilla ×1', 4000, dl], ['seed5', '🌱 Semillas ×5', 19000, dl], ['lamp', '💡 Lámpara LED nivel ' + (d.lamp + 1) + (d.lamp >= 3 ? ' (máx.)' : ''), d.lamp === 1 ? 15000 : 45000, dl && d.lamp < 3], ['mask', '🎭 Máscara' + (CR.maskOwned ? ' (ya la tienes)' : ''), 3000, !CR.maskOwned]];
-        c.innerHTML = `<h2>🌿 GrowShop Verde</h2><p class="note">Cultivo y equipo. ${dl ? 'Tienes que estar dentro de tu casa para plantar.' : 'Las semillas y lámparas solo las vende el dueño a sus colaboradores (habla con él).'}</p>` + rows.map(([id, n, p, ok]) => `<div class="hm-row"><span>${n}</span><button class="btn sm primary" data-b="${id}" ${ok && can(p) ? '' : 'disabled'}>${fmt(p)}</button></div>`).join('') + '<div class="acts"><button class="btn" id="gsX">Cerrar</button></div>';
-        c.querySelector('#gsX').onclick = () => UI.closeModal();
+        c.innerHTML = `<h2>🌿 GrowShop Verde</h2><p class="note">Cultivo y equipo. ${dl ? 'Tienes que estar dentro de tu casa para plantar.' : 'Las semillas y lámparas solo las vende el dueño a sus colaboradores (pulsa «Hablar con el dueño» aquí abajo).'}</p>` + rows.map(([id, n, p, ok]) => `<div class="hm-row"><span>${n}</span><button class="btn sm primary" data-b="${id}" ${ok && can(p) ? '' : 'disabled'}>${fmt(p)}</button></div>`).join('') + '<div class="acts">' + (dl ? '' : '<button class="btn primary" id="gsJ">🤝 Hablar con el dueño (ser distribuidor)</button>') + '<button class="btn" id="gsX">Cerrar</button></div>';
+        c.querySelector('#gsX').onclick = () => UI.closeModal(); const jb = c.querySelector('#gsJ'); jb && (jb.onclick = () => { UI.closeModal(); setTimeout(() => Dealer.join(), 50); });
         c.querySelectorAll('[data-b]').forEach(b => b.onclick = () => {
           const r = rows.find(x => x[0] === b.dataset.b); if (!Wallet.spend(r[2], 'GrowShop')) return;
           if (r[0] === 'mask') { CR.maskOwned = true; Store.set('mask', true); } else if (r[0] === 'lamp') crSend({ t: 'd', a: 'lamp' }); else crSend({ t: 'd', a: 'seed', n: r[0] === 'seed1' ? 1 : 5 });
@@ -8065,6 +8246,51 @@ const Arms = {
     setInterval(() => { const P = World.player; if (this.cur && P && P.h && this.mesh && this.mesh.parent !== P.h.root) this.drawMesh(); }, 700); this.btn();
   },
 };
+
+/* ---- 30_admin.js ---- */
+/* =====================================================================
+   MODO ADMIN (solo pruebas). Se activa en el chat con /admin CONTRASEÑA;
+   la contraseña la valida el servidor (variable ADMIN_PASS en Render).
+   Nada de lo que se haga en este modo se guarda ni se envía al ranking.
+   ===================================================================== */
+const Admin = {
+  on: false, inv: false,
+  KEEP: new Set(['adult18', 'pn_seen', 'notif']),
+  set(on) {
+    if (on === this.on) return; this.on = on;
+    if (!on) { this.dead = true; try { location.reload(); } catch (e) { } return; }
+    this.panel(); UI.toast('🛠️ MODO ADMIN: no se guarda nada de lo que hagas', 'good');
+  },
+  send(m) { Net.transport && Net.transport.send(Object.assign({ t: 'adm' }, m)); },
+  money(c) { Wallet.grant(c, 'admin'); },
+  all() {
+    const V = Vehicles.st(); for (const c of CARS) if (!V.own[c.id]) V.own[c.id] = { col: PAINTS[0], t: {} };
+    for (const w of WEAPONS) { const o = Arms.inv[w.id] || (Arms.inv[w.id] = { ammo: 0 }); o.ammo = 999; }
+    CR.maskOwned = true; for (const i of ITEMS) Style.st().own[i.id] = 1;
+    this.send({ a: 'lic' }); UI.toast('🎒 Tienes todos los coches, armas, ropa, máscara y licencia', 'good');
+  },
+  panel() {
+    let d = document.getElementById('admPanel'); if (d) return;
+    d = document.createElement('div'); d.id = 'admPanel';
+    d.style.cssText = 'position:fixed;left:10px;top:70px;z-index:60;background:#150a24ee;border:2px solid #ffcf3a;border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:5px;font:600 12px system-ui;color:#fff;max-width:170px';
+    const B = (t, f) => { const b = document.createElement('button'); b.className = 'btn sm'; b.textContent = t; b.onclick = f; d.appendChild(b); return b; };
+    const h = document.createElement('b'); h.textContent = '🛠️ ADMIN (no se guarda)'; h.style.color = '#ffcf3a'; d.appendChild(h);
+    B('💰 +10.000 €', () => this.money(1e6)); B('💰 +1.000.000 €', () => this.money(1e8)); B('💰 +100.000.000 €', () => this.money(1e10));
+    const iv = B('👻 Invisible: no', () => { this.inv = !this.inv; this.send({ a: 'inv', on: this.inv }); iv.textContent = '👻 Invisible: ' + (this.inv ? 'sí' : 'no'); });
+    B('🎒 Todos los items', () => this.all());
+    B('🌿 Ser distribuidor', () => this.send({ a: 'dealer' })); B('📦 Semillas y producto', () => this.send({ a: 'goods' }));
+    B('👮 Ser policía', () => this.send({ a: 'cop' })); B('📜 Licencia de armas', () => this.send({ a: 'lic' }));
+    B('✖ Salir del admin', () => Chat.send('/admin off'));
+    document.body.appendChild(d);
+  },
+};
+{
+  const _ss = Store.set; Store.set = function (k, v) { if ((Admin.on || Admin.dead) && !Admin.KEEP.has(k)) return; return _ss.call(this, k, v); };
+  const _ra = Net.receive; Net.receive = function (m) { if (m && m.t === 'adm') { Admin.set(!!m.on); return; } return _ra.call(this, m); };
+  const _ts = Top.send; Top.send = function () { if (Admin.on) return; return _ts.apply(this, arguments); };
+  const _tx = Net.sendTx; Net.sendTx = function () { if (Admin.on) return; return _tx.apply(this, arguments); };
+  const _ac = Homes.access; Homes.access = function (id) { return Admin.on || _ac.call(this, id); };
+}
 
 /* ---- 99_main.js ---- */
 /* =====================================================================

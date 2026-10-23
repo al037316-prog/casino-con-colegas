@@ -74,7 +74,16 @@ GUARDADO PERMANENTE (recomendado, gratis)
   3. En Render → Environment añade esas dos variables con sus valores. Listo.
   Al arrancar, el registro de Render dirá "guardado en Upstash".
 
-NOVEDADES v1.4 (calidad de vida)
+MODO ADMIN (solo pruebas)
+  En el chat: /admin CONTRASEÑA  (la misma ADMIN_PASS de Render). Sale un panel con dinero, invisibilidad,
+  todos los items, ser distribuidor/policía y licencia. Nada de lo que hagas en modo admin se guarda ni
+  llega al ranking: /admin off (o recargar la página) y todo vuelve a como estaba.
+
+CASAS
+  34 casas en 8 tipos. Cada casa tiene un único dueño (lo controla el servidor y se guarda en data.json /
+  Upstash). Alquiler de 7 días: si caduca, la casa vuelve a estar libre.
+
+NOVEDADES v1.4/v1.5
   - Subastas: 15 min, +1 min por puja, aviso en pantalla, devolución automática al ser superado.
   - Guardado: escritura atómica, copia .bak y volcado al apagar (en Render gratis usa Upstash para
     que los datos sobrevivan a reinicios y actualizaciones).
